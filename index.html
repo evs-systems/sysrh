@@ -528,12 +528,50 @@
           }, []);
 
           useEffect(() => {
+            const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+              setUser(currentUser);
+              if (currentUser) {
+                try {
+                  const uDoc = await getDoc(doc(db, `${basePath}/systemUsers/${currentUser.uid}`));
+                  if (uDoc.exists()) {
+                    setAppUser({ id: currentUser.uid, ...uDoc.data() });
+                  } else {
+                    setAppUser({ 
+                      id: currentUser.uid, 
+                      name: 'Usuário', 
+                      username: currentUser.email?.split('@')[0] || 'user', 
+                      sector: 'Administração', 
+                      permissions: { calendar: {read: true, write: true, delete: true}, reports: {read: true, write: true, delete: true}, companies: {read: true, write: true, delete: true}, employees: {read: true, write: true, delete: true}, payments: {read: true, write: true, delete: true}, disciplinary: {read: true, write: true, delete: true}, systemUsers: {read: true, write: true, delete: true}, logs: {read: true, write: false, delete: false} }
+                    });
+                  }
+                } catch (error) {
+                  // Ocultado o showToast de erro de permissão para não incomodar o usuário
+                  if (error.code !== 'permission-denied') {
+                     console.error("Erro ao buscar usuário:", error);
+                  }
+                  setAppUser({ 
+                    id: currentUser.uid, 
+                    name: 'Acesso Restrito', 
+                    username: 'admin', 
+                    sector: 'Administração', 
+                    permissions: { calendar: {read: true, write: true, delete: true}, reports: {read: true, write: true, delete: true}, companies: {read: true, write: true, delete: true}, employees: {read: true, write: true, delete: true}, payments: {read: true, write: true, delete: true}, disciplinary: {read: true, write: true, delete: true}, systemUsers: {read: true, write: true, delete: true}, logs: {read: true, write: false, delete: false} }
+                  });
+                }
+              } else {
+                setAppUser(null);
+              }
+              setLoading(false);
+            });
+            return () => unsubscribe();
+          }, []);
+
+          useEffect(() => {
             if (!user) return;
 
             const handleSnapError = (error) => {
-              console.error("Firestore snapshot error:", error);
-              if (error.code === 'permission-denied') {
-                showToast("Erro de permissão! Ajuste as Regras do Firestore no Firebase Console.", "error");
+              // Silencia o erro no console e na tela se for apenas bloqueio de permissão esperado
+              if (error.code !== 'permission-denied') {
+                console.error("Firestore snapshot error:", error);
               }
             };
 
@@ -1468,30 +1506,55 @@
             return false;
           }).sort((a, b) => a._diffDays - b._diffDays);
 
-          // Lógica para tempo de experiência a vencer (45 e 90 dias)
-          const expiringProbations = [];
+          // Lógica para listar todos os funcionários atualmente em período de experiência
+          const probationEmployees = [];
           activeEmployees.forEach(emp => {
+            let d45 = null, diff45 = null;
+            let d90 = null, diff90 = null;
+
             if (emp.probation45) {
-              const d45 = parseBrDateToObj(emp.probation45);
-              if (d45) {
-                const diff45 = Math.ceil((d45.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
-                if (diff45 <= 7 && diff45 >= -30) {
-                  expiringProbations.push({ ...emp, _probType: '45 Dias', _probDate: emp.probation45, _diffDays: diff45 });
-                }
-              }
+              d45 = parseBrDateToObj(emp.probation45);
+              if (d45) diff45 = Math.ceil((d45.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
             }
             if (emp.probation90) {
-              const d90 = parseBrDateToObj(emp.probation90);
-              if (d90) {
-                const diff90 = Math.ceil((d90.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
-                if (diff90 <= 7 && diff90 >= -30) {
-                  expiringProbations.push({ ...emp, _probType: '90 Dias', _probDate: emp.probation90, _diffDays: diff90 });
+              d90 = parseBrDateToObj(emp.probation90);
+              if (d90) diff90 = Math.ceil((d90.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
+            }
+
+            let inProbation = false;
+            let nextMilestone = null;
+            let nextMilestoneDiff = null;
+
+            // Se ainda não passou os 90 dias, está em experiência
+            if (diff90 !== null && diff90 >= 0) {
+                inProbation = true;
+                if (diff45 !== null && diff45 >= 0) {
+                    nextMilestone = '45 Dias';
+                    nextMilestoneDiff = diff45;
+                } else {
+                    nextMilestone = '90 Dias';
+                    nextMilestoneDiff = diff90;
                 }
-              }
+            } else if (diff90 === null && diff45 !== null && diff45 >= 0) {
+                // Caso tenha apenas os 45 dias registrados
+                inProbation = true;
+                nextMilestone = '45 Dias';
+                nextMilestoneDiff = diff45;
+            }
+
+            if (inProbation) {
+              probationEmployees.push({
+                ...emp,
+                _diff45: diff45,
+                _diff90: diff90,
+                _nextMilestone: nextMilestone,
+                _nextMilestoneDiff: nextMilestoneDiff
+              });
             }
           });
+
           // Ordena os que vencem primeiro
-          expiringProbations.sort((a, b) => a._diffDays - b._diffDays);
+          probationEmployees.sort((a, b) => a._nextMilestoneDiff - b._nextMilestoneDiff);
 
           return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -1642,22 +1705,31 @@
                     <ShieldCheck size={20} className="text-indigo-500 flex-shrink-0" /> Fim de Experiência
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                    {expiringProbations.map((emp, idx) => {
-                      const isOverdue = emp._diffDays < 0;
-                      const isToday = emp._diffDays === 0;
+                    {probationEmployees.map(emp => {
+                      const isToday = emp._nextMilestoneDiff === 0;
                       return (
-                        <div key={`prob-${emp.id}-${idx}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                          <div className="flex flex-col min-w-0 flex-1 mr-2">
-                            <span className="font-medium truncate">{emp.name}</span>
-                            <span className="text-[10px] text-slate-500 truncate">{emp._probType} - Término: {emp._probDate}</span>
+                        <div key={`prob-${emp.id}`} className="flex flex-col p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex flex-col min-w-0 flex-1 mr-2">
+                              <span className="font-medium truncate text-sm">{emp.name}</span>
+                              <span className="text-[10px] text-slate-500 truncate">{emp.role} {emp.department ? `• ${emp.department}` : ''}</span>
+                            </div>
+                            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400'}`}>
+                              {isToday ? `${emp._nextMilestone} Hoje` : `${emp._nextMilestone} em ${emp._nextMilestoneDiff} d`}
+                            </span>
                           </div>
-                          <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400'}`}>
-                            {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${emp._diffDays} dias`}
-                          </span>
+                          <div className="flex justify-between items-center text-[10px] bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                             <span className={`${emp._diff45 !== null && emp._diff45 < 0 ? 'line-through opacity-50' : 'font-medium text-slate-600 dark:text-slate-300'}`}>
+                               <strong className="text-slate-700 dark:text-slate-200">45d:</strong> {emp.probation45 || 'N/A'}
+                             </span>
+                             <span className={`${emp._diff90 !== null && emp._diff90 < 0 ? 'line-through opacity-50' : 'font-medium text-slate-600 dark:text-slate-300'}`}>
+                               <strong className="text-slate-700 dark:text-slate-200">90d:</strong> {emp.probation90 || 'N/A'}
+                             </span>
+                          </div>
                         </div>
                       );
                     })}
-                    {expiringProbations.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-2">Nenhum período de experiência vencendo nos próximos 7 dias.</p>}
+                    {probationEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-2">Nenhum colaborador em período de experiência.</p>}
                   </div>
                 </Card>
               </div>
@@ -2374,6 +2446,12 @@
           
           const [formData, setFormData] = useState(initialFormState);
           const [searchTerm, setSearchTerm] = useState('');
+          const [visibleCount, setVisibleCount] = useState(50);
+
+          // Repõe a contagem visível sempre que o utilizador muda de aba ou faz uma pesquisa
+          useEffect(() => {
+            setVisibleCount(50);
+          }, [activeSubTab, searchTerm]);
 
           const canWrite = appUser?.permissions?.employees?.write;
           const canDelete = appUser?.permissions?.employees?.delete;
@@ -2391,6 +2469,10 @@
           if (activeSubTab === 'emprestimos') currentList = loanEmployees;
 
           const filtered = currentList.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.cpf.includes(searchTerm));
+          
+          // Ordena pelos mais recentes e limita a exibição
+          const sortedFiltered = [...filtered].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+          const displayedEmployees = sortedFiltered.slice(0, visibleCount);
 
           const openModal = (emp = null) => {
             if (!canWrite) return;
@@ -2646,7 +2728,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {filtered.map(emp => (
+                        {displayedEmployees.map(emp => (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
@@ -2696,13 +2778,27 @@
                             )}
                           </tr>
                         ))}
-                        {filtered.length === 0 && (
+                        {displayedEmployees.length === 0 && (
                           <tr><td colSpan={(canWrite || canDelete) ? "5" : "4"} className="p-8 text-center text-slate-500">Nenhum registro encontrado.</td></tr>
                         )}
                       </tbody>
                     </table>
                   )}
                 </div>
+                
+                {/* Botão de Paginação (Carregar Mais) */}
+                {filtered.length > visibleCount && (
+                  <div className="p-4 flex justify-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl mt-2">
+                    <Button 
+                      variant="secondary" 
+                      theme={theme} 
+                      onClick={() => setVisibleCount(prev => prev + 50)}
+                      icon={RefreshCw}
+                    >
+                      Carregar mais dados
+                    </Button>
+                  </div>
+                )}
               </Card>
 
               <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Editar Funcionário' : 'Novo Funcionário'}>
@@ -3066,8 +3162,15 @@
           });
 
           const [bulkFormData, setBulkFormData] = useState({
-            employeeIds: [], amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não'
+            employeeIds: [], employeeAmounts: {}, date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não'
           });
+
+          const [visibleCount, setVisibleCount] = useState(50);
+
+          // Repõe a contagem visível sempre que o utilizador muda de aba ou altera os filtros
+          useEffect(() => {
+            setVisibleCount(50);
+          }, [activeSubTab, historySearchTerm, historyMonthFilter, historyYearFilter]);
 
           const canWrite = appUser?.permissions?.payments?.write;
           const canDelete = appUser?.permissions?.payments?.delete;
@@ -3172,6 +3275,7 @@
           displayedHistory.sort((a,b) => parseDate(b.date) - parseDate(a.date));
 
           const displayedPayments = activeSubTab === 'history' ? displayedHistory : categorizedPayments[activeSubTab];
+          const paginatedPayments = displayedPayments.slice(0, visibleCount);
 
           const selectedPrintCount = Object.values(printSelections).filter(Boolean).length;
 
@@ -3180,9 +3284,9 @@
           };
 
           const toggleAllPrintSelection = () => {
-            const allSelected = displayedPayments.length > 0 && displayedPayments.every(p => printSelections[p.id]);
+            const allSelected = paginatedPayments.length > 0 && paginatedPayments.every(p => printSelections[p.id]);
             const newState = { ...printSelections };
-            displayedPayments.forEach(p => {
+            paginatedPayments.forEach(p => {
               newState[p.id] = !allSelected;
             });
             setPrintSelections(newState);
@@ -3315,13 +3419,19 @@
                return;
             }
 
+            const missingAmounts = bulkFormData.employeeIds.some(id => !bulkFormData.employeeAmounts[id] || Number(bulkFormData.employeeAmounts[id]) <= 0);
+            if (missingAmounts) {
+               showToast('Preencha o valor para todos os colaboradores selecionados.', 'error');
+               return;
+            }
+
             try {
               const promises = bulkFormData.employeeIds.map(empId => {
                 return addDoc(collection(db, `${basePath}/payments`), {
                   category: 'employee',
                   employeeId: empId,
                   payeeName: null,
-                  amount: bulkFormData.amount,
+                  amount: bulkFormData.employeeAmounts[empId],
                   date: bulkFormData.date,
                   type: bulkFormData.type,
                   description: bulkFormData.description,
@@ -3339,10 +3449,11 @@
 
               await Promise.all(promises);
 
-              logAction('Cadastro', 'Pagamentos', `Programou pagamento em massa (${bulkFormData.type}) no valor de R$ ${bulkFormData.amount} para ${bulkFormData.employeeIds.length} colaborador(es).`);
+              const totalAmount = bulkFormData.employeeIds.reduce((acc, id) => acc + Number(bulkFormData.employeeAmounts[id]), 0);
+              logAction('Cadastro', 'Pagamentos', `Programou pagamento em massa (${bulkFormData.type}) no valor total de R$ ${totalAmount.toFixed(2)} para ${bulkFormData.employeeIds.length} colaborador(es).`);
               showToast(`Sucesso! ${bulkFormData.employeeIds.length} pagamentos foram programados.`);
               setIsBulkModalOpen(false);
-              setBulkFormData({ employeeIds: [], amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não' });
+              setBulkFormData({ employeeIds: [], employeeAmounts: {}, date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não' });
               setBulkSearchTerm('');
             } catch (err) {
               showToast('Erro ao programar pagamentos em massa.', 'error');
@@ -3352,7 +3463,9 @@
           const toggleBulkEmployee = (empId) => {
             setBulkFormData(prev => {
               if (prev.employeeIds.includes(empId)) {
-                return { ...prev, employeeIds: prev.employeeIds.filter(id => id !== empId) };
+                const newAmounts = { ...prev.employeeAmounts };
+                delete newAmounts[empId];
+                return { ...prev, employeeIds: prev.employeeIds.filter(id => id !== empId), employeeAmounts: newAmounts };
               } else {
                 return { ...prev, employeeIds: [...prev.employeeIds, empId] };
               }
@@ -3364,12 +3477,24 @@
               const allFilteredIds = filteredEmps.map(e => e.id);
               const isAllSelected = allFilteredIds.every(id => prev.employeeIds.includes(id));
               if (isAllSelected) {
-                 return { ...prev, employeeIds: prev.employeeIds.filter(id => !allFilteredIds.includes(id)) };
+                 const newAmounts = { ...prev.employeeAmounts };
+                 allFilteredIds.forEach(id => delete newAmounts[id]);
+                 return { ...prev, employeeIds: prev.employeeIds.filter(id => !allFilteredIds.includes(id)), employeeAmounts: newAmounts };
               } else {
                  const newIds = new Set([...prev.employeeIds, ...allFilteredIds]);
                  return { ...prev, employeeIds: Array.from(newIds) };
               }
             });
+          };
+
+          const handleBulkAmountChange = (empId, value) => {
+            setBulkFormData(prev => ({
+                ...prev,
+                employeeAmounts: {
+                    ...prev.employeeAmounts,
+                    [empId]: value
+                }
+            }));
           };
 
           const addItem = () => setFormData({ ...formData, items: [...formData.items, { amount: '', date: '', type: formData.category === 'employee' ? 'Salário' : 'Boleto', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não', bankName: '', agency: '', account: '', pixKey: '' }] });
@@ -3652,7 +3777,7 @@
                             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                             title="Selecionar todos desta aba para recibo"
                           >
-                            {displayedPayments.length > 0 && displayedPayments.every(p => printSelections[p.id]) ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} />}
+                            {paginatedPayments.length > 0 && paginatedPayments.every(p => printSelections[p.id]) ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} />}
                           </button>
                         </th>
                         <th className="p-4 font-medium">Data Prog.</th>
@@ -3664,7 +3789,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {displayedPayments.map(pay => {
+                      {paginatedPayments.map(pay => {
                         const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
                         const isLate = parseDate(pay.date) < todayTime && pay.status !== 'Pago';
                         const isSelected = !!printSelections[pay.id];
@@ -3803,7 +3928,7 @@
                           </tr>
                         );
                       })}
-                      {displayedPayments.length === 0 && (
+                      {paginatedPayments.length === 0 && (
                         <tr>
                           <td colSpan={activeSubTab === 'history' ? 7 : 6} className="p-12 text-center text-slate-500">
                             Nenhum pagamento encontrado nesta categoria.
@@ -3813,6 +3938,20 @@
                     </tbody>
                   </table>
                 </div>
+                
+                {/* Botão de Paginação (Carregar Mais) */}
+                {displayedPayments.length > visibleCount && (
+                  <div className="p-4 flex justify-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl mt-2">
+                    <Button 
+                      variant="secondary" 
+                      theme={theme} 
+                      onClick={() => setVisibleCount(prev => prev + 50)}
+                      icon={RefreshCw}
+                    >
+                      Carregar mais dados
+                    </Button>
+                  </div>
+                )}
               </Card>
 
               {/* Modal: Programar Novos Pagamentos (Múltiplos) */}
@@ -3949,16 +4088,7 @@
                         />
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Input 
-                          label="Valor (R$)" type="text" theme={theme} required 
-                          value={bulkFormData.amount ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(bulkFormData.amount) : ''} 
-                          onChange={e => {
-                            let val = e.target.value.replace(/\D/g, '');
-                            if (!val) return setBulkFormData({...bulkFormData, amount: ''});
-                            setBulkFormData({...bulkFormData, amount: (Number(val) / 100).toFixed(2)});
-                          }} 
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Select 
                           label="Conta da Empresa?" theme={theme} required value={bulkFormData.mandatoryCompanyAccount} 
                           onChange={e => setBulkFormData({...bulkFormData, mandatoryCompanyAccount: e.target.value})}
@@ -4001,20 +4131,37 @@
                             Selecionar Todos (Filtrados)
                          </button>
                       </div>
-                      <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                      <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 space-y-2">
                         {activeEmpsForBulk.map(emp => {
                           const isSelected = bulkFormData.employeeIds.includes(emp.id);
                           return (
                             <div 
                               key={emp.id} 
-                              onClick={() => toggleBulkEmployee(emp.id)}
-                              className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                              className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl transition-colors border ${isSelected ? 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
                             >
-                              {isSelected ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} className="text-slate-400" />}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{emp.name}</p>
-                                <p className="text-[10px] text-slate-500 truncate">{emp.role} • {emp.department}</p>
+                              <div className="flex items-center gap-3 cursor-pointer w-full sm:w-auto flex-1" onClick={() => toggleBulkEmployee(emp.id)}>
+                                {isSelected ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} className="text-slate-400" />}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{emp.name}</p>
+                                  <p className="text-[10px] text-slate-500 truncate">{emp.role} • {emp.department}</p>
+                                </div>
                               </div>
+                              {isSelected && (
+                                <div className="w-full sm:w-32 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                  <input 
+                                    type="text"
+                                    placeholder="Valor (R$)"
+                                    required
+                                    className={`w-full px-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2`}
+                                    value={bulkFormData.employeeAmounts[emp.id] ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(bulkFormData.employeeAmounts[emp.id]) : ''}
+                                    onChange={e => {
+                                      let val = e.target.value.replace(/\D/g, '');
+                                      if (!val) return handleBulkAmountChange(emp.id, '');
+                                      handleBulkAmountChange(emp.id, (Number(val) / 100).toFixed(2));
+                                    }}
+                                  />
+                                </div>
+                              )}
                             </div>
                           )
                         })}
