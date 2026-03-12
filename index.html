@@ -753,8 +753,8 @@
 
           if (!appUser) {
             return (
-              <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
-                <Card className="w-full max-w-md p-8 animate-in zoom-in-95 duration-500">
+              <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 p-4 relative">
+                <Card className="w-full max-w-md p-8 animate-in zoom-in-95 duration-500 z-10">
                   <div className="flex justify-center mb-6">
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg ${theme.bg}`}>
                       <Lock size={32} />
@@ -783,6 +783,10 @@
                     </Button>
                   </form>
                 </Card>
+                
+                <div className="absolute bottom-6 w-full text-center px-4">
+                  <p className="text-sm font-medium text-slate-400 dark:text-slate-500">Desenvolvido pela equipe de tecnologia da informação.</p>
+                </div>
               </div>
             );
           }
