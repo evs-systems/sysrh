@@ -172,7 +172,8 @@
           Search, Printer, CheckSquare, Square, X, ChevronRight, ChevronLeft, Menu,
           TrendingUp, Activity, Shield, ChevronDown, Lock, Key, History, FileCheck,
           Briefcase, MapPin, Download, Building, Gift, Calendar as CalendarIcon, Clock,
-          BarChart2, UserPlus, UserMinus, Loader2, RefreshCw, ShieldCheck
+          BarChart2, UserPlus, UserMinus, Loader2, RefreshCw, ShieldCheck,
+          MessageSquare, Send, Reply, XCircle
         } from 'lucide-react';
         import { initializeApp, deleteApp } from 'firebase/app';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from 'firebase/auth';
@@ -999,7 +1000,413 @@
                   </div>
                 </div>
               )}
+
+              {/* Chat Interno Flutuante */}
+              <ChatWidget theme={theme} basePath={basePath} appUser={appUser} systemUsers={systemUsers} db={db} />
+
             </div>
+          );
+        }
+
+        function ChatWidget({ theme, basePath, appUser, systemUsers, db }) {
+          const [isOpen, setIsOpen] = useState(false);
+          const [activeChat, setActiveChat] = useState(null);
+          const [messages, setMessages] = useState([]);
+          const [inputText, setInputText] = useState('');
+          const [chatTab, setChatTab] = useState('users');
+          const [replyingTo, setReplyingTo] = useState(null);
+          const [editingMsg, setEditingMsg] = useState(null);
+          const [unreadChats, setUnreadChats] = useState({});
+          const messagesEndRef = useRef(null);
+
+          // Obtém os setores únicos para criar os grupos dinamicamente
+          const sectors = Array.from(new Set(systemUsers.map(u => u.sector).filter(Boolean)));
+          
+          // Verifica se há pelo menos um chat não lido
+          const hasUnreadTotal = Object.values(unreadChats).some(Boolean);
+
+          useEffect(() => {
+            if (messagesEndRef.current) {
+              messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, [messages]);
+
+          // Lógica global de notificações (Monitora as mensagens recebidas de todos)
+          useEffect(() => {
+            if (!appUser || !db || !systemUsers.length) return;
+            const unsubs = [];
+            
+            const checkUnread = (chatId, snapshot) => {
+                const lastRead = localStorage.getItem(`lastRead_${chatId}`) || 0;
+                const hasNew = snapshot.docs.some(doc => {
+                    const data = doc.data();
+                    return data.senderId !== appUser.id && new Date(data.timestamp).getTime() > Number(lastRead);
+                });
+                setUnreadChats(prev => {
+                    if (prev[chatId] === hasNew) return prev;
+                    return { ...prev, [chatId]: hasNew };
+                });
+            };
+
+            // Monitora o grupo do setor do usuário
+            if (appUser.sector) {
+              const groupChatId = `group_${appUser.sector.replace(/\s+/g, '_')}`;
+              unsubs.push(onSnapshot(collection(db, `chats/${groupChatId}/messages`), (snap) => checkUnread(groupChatId, snap)));
+            }
+
+            // Monitora as mensagens diretas com outros usuários
+            systemUsers.forEach(u => {
+                if (u.id === appUser.id) return;
+                const dmId = `direct_${[appUser.id, u.id].sort().join('_')}`;
+                unsubs.push(onSnapshot(collection(db, `chats/${dmId}/messages`), (snap) => checkUnread(dmId, snap)));
+            });
+
+            return () => unsubs.forEach(u => u());
+          }, [appUser, db, systemUsers]);
+
+          // Limpa a notificação assim que o usuário abre o chat específico
+          useEffect(() => {
+            if (isOpen && activeChat) {
+                localStorage.setItem(`lastRead_${activeChat.id}`, Date.now().toString());
+                setUnreadChats(prev => {
+                    if (!prev[activeChat.id]) return prev;
+                    return { ...prev, [activeChat.id]: false };
+                });
+            }
+          }, [isOpen, activeChat, messages]);
+
+          // Monitora as mensagens apenas do chat que está aberto na tela
+          useEffect(() => {
+            if (!activeChat || !isOpen || !db) return;
+            
+            const chatPath = `chats/${activeChat.id}/messages`;
+            
+            const unsub = onSnapshot(
+              collection(db, chatPath),
+              (snapshot) => {
+                const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                setMessages(msgs);
+                setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+              },
+              (error) => {
+                console.error("Erro ao carregar mensagens:", error);
+              }
+            );
+            return () => unsub();
+          }, [activeChat, isOpen, db]);
+
+          const openDirectChat = (targetUser) => {
+            if (!appUser || !targetUser) return;
+            const id = [appUser.id, targetUser.id].sort().join('_');
+            setActiveChat({ id: `direct_${id}`, name: targetUser.name, type: 'direct' });
+          };
+
+          const openGroupChat = (sector) => {
+            setActiveChat({ id: `group_${sector.replace(/\s+/g, '_')}`, name: `Grupo: ${sector}`, type: 'group' });
+          };
+
+          const handleSend = async (e) => {
+            e.preventDefault();
+            if (!inputText.trim() || !appUser || !activeChat || !db) return;
+
+            const chatPath = `chats/${activeChat.id}/messages`;
+
+            try {
+              if (editingMsg) {
+                const docRef = doc(db, chatPath, editingMsg.id);
+                await updateDoc(docRef, {
+                  text: inputText,
+                  isEdited: true
+                });
+                setEditingMsg(null);
+              } else {
+                await addDoc(collection(db, chatPath), {
+                  senderId: appUser.id,
+                  senderName: appUser.name,
+                  text: inputText,
+                  timestamp: new Date().toISOString(),
+                  isEdited: false,
+                  replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, senderName: replyingTo.senderName } : null
+                });
+                setReplyingTo(null);
+              }
+              setInputText('');
+            } catch (err) {
+              console.error("Erro ao enviar mensagem:", err);
+              alert("Não foi possível enviar a mensagem. Verifique sua conexão ou permissões.");
+            }
+          };
+
+          const startEdit = (msg) => {
+            setEditingMsg(msg);
+            setReplyingTo(null);
+            setInputText(msg.text);
+          };
+
+          const startReply = (msg) => {
+            setReplyingTo(msg);
+            setEditingMsg(null);
+            setInputText('');
+          };
+
+          // Função auxiliar para agrupar mensagens por data
+          const formatDateHeader = (dateString) => {
+            const msgDate = new Date(dateString);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            msgDate.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+            yesterday.setHours(0, 0, 0, 0);
+
+            const diffTime = Math.abs(today - msgDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (msgDate.getTime() === today.getTime()) {
+              return 'Hoje';
+            } else if (msgDate.getTime() === yesterday.getTime()) {
+              return 'Ontem';
+            } else if (diffDays <= 7) {
+              const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+              return diasSemana[msgDate.getDay()];
+            } else {
+              return msgDate.toLocaleDateString('pt-BR');
+            }
+          };
+
+          // Agrupando mensagens
+          const groupedMessages = [];
+          let lastDateHeader = null;
+
+          messages.forEach(msg => {
+            const dateHeader = formatDateHeader(msg.timestamp);
+            if (dateHeader !== lastDateHeader) {
+              groupedMessages.push({ type: 'header', text: dateHeader, id: `header-${msg.id}` });
+              lastDateHeader = dateHeader;
+            }
+            groupedMessages.push({ type: 'message', ...msg });
+          });
+
+          return (
+            <>
+              {/* Botão Flutuante com Notificação de Mensagem Não Lida */}
+              <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className={`fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white z-[105] hover:scale-105 transition-transform duration-300 ${theme.bg}`}
+                title="Chat Interno"
+              >
+                {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
+                {!isOpen && hasUnreadTotal && (
+                  <span className="absolute top-0 right-0 w-4 h-4 bg-rose-500 border-2 border-white dark:border-slate-900 rounded-full animate-pulse shadow-sm"></span>
+                )}
+              </button>
+
+              {/* Janela do Chat */}
+              {isOpen && (
+                <div className="fixed bottom-24 right-6 w-[360px] max-w-[calc(100vw-3rem)] h-[550px] max-h-[70vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[105] flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-300">
+                  
+                  {/* Cabeçalho */}
+                  <div className={`p-4 flex items-center gap-3 ${theme.bg} text-white`}>
+                    {activeChat && (
+                      <button onClick={() => setActiveChat(null)} className="p-1 hover:bg-white/20 rounded-lg transition-colors">
+                        <ChevronLeft size={20} />
+                      </button>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-base truncate">{activeChat ? activeChat.name : 'Chat Interno'}</h3>
+                      <p className="text-xs opacity-80 truncate">{activeChat ? (activeChat.type === 'group' ? 'Grupo Setorial' : 'Mensagem Direta') : 'Comunicação da Equipe'}</p>
+                    </div>
+                  </div>
+
+                  {!activeChat ? (
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                      <div className="flex bg-slate-50 dark:bg-slate-800/50 p-2 gap-2 border-b border-slate-200 dark:border-slate-700">
+                        <button onClick={() => setChatTab('users')} className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-colors ${chatTab === 'users' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}>Usuários</button>
+                        <button onClick={() => setChatTab('groups')} className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-colors ${chatTab === 'groups' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}>Grupos</button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                        
+                        {/* Lista de Usuários com Indicador de Não Lida */}
+                        {chatTab === 'users' && systemUsers.filter(u => u.id !== appUser.id).map(u => {
+                          const dmId = `direct_${[appUser.id, u.id].sort().join('_')}`;
+                          const hasNewMsg = unreadChats[dmId];
+                          return (
+                            <div key={u.id} onClick={() => openDirectChat(u)} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`w-10 h-10 rounded-full flex flex-shrink-0 items-center justify-center text-white text-sm font-bold ${theme.bg}`}>
+                                  {u.name ? u.name.charAt(0).toUpperCase() : '?'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-medium text-sm truncate ${hasNewMsg ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-800 dark:text-slate-100'}`}>{u.name || 'Desconhecido'}</p>
+                                  <p className={`text-[10px] truncate ${hasNewMsg ? 'text-rose-500 font-semibold' : 'text-slate-500'}`}>{u.sector || 'Sem setor'}</p>
+                                </div>
+                              </div>
+                              {hasNewMsg && <div className="w-2.5 h-2.5 bg-rose-500 rounded-full shadow-sm flex-shrink-0 ml-2"></div>}
+                            </div>
+                          );
+                        })}
+
+                        {/* Lista de Grupos com Indicador de Não Lida */}
+                        {chatTab === 'groups' && sectors.map(sector => {
+                          const groupChatId = `group_${sector.replace(/\s+/g, '_')}`;
+                          const hasNewMsg = unreadChats[groupChatId];
+                          return (
+                            <div key={sector} onClick={() => openGroupChat(sector)} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-full flex flex-shrink-0 items-center justify-center text-white bg-slate-700 text-sm font-bold">
+                                  <Users size={16} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-medium text-sm truncate ${hasNewMsg ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-800 dark:text-slate-100'}`}>Equipe: {sector}</p>
+                                  <p className={`text-[10px] truncate ${hasNewMsg ? 'text-rose-500 font-semibold' : 'text-slate-500'}`}>Chat do setor</p>
+                                </div>
+                              </div>
+                              {hasNewMsg && <div className="w-2.5 h-2.5 bg-rose-500 rounded-full shadow-sm flex-shrink-0 ml-2"></div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col bg-slate-50/50 dark:bg-slate-900 overflow-hidden relative">
+                      
+                      {/* Lista de Mensagens */}
+                      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+                        {groupedMessages.length === 0 && <p className="text-center text-xs text-slate-400 mt-10">Inicie a conversa!</p>}
+                        {groupedMessages.map((item, index) => {
+                          if (item.type === 'header') {
+                            return (
+                              <div key={item.id} className="flex justify-center my-4">
+                                <span className="px-3 py-1 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-medium rounded-full shadow-sm">
+                                  {item.text}
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          const msg = item;
+                          const isMe = msg.senderId === appUser.id;
+                          return (
+                            <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group w-full mb-1`}>
+                              
+                              {/* Nome de quem enviou acima do balão (apenas em grupos e se não for você) */}
+                              {!isMe && activeChat?.type === 'group' && (
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 ml-1.5">
+                                  {msg.senderName}
+                                </span>
+                              )}
+
+                              <div className="flex items-center gap-2 max-w-[85%]">
+                                {/* Ações lado Esquerdo (se for Minha mensagem) */}
+                                {isMe && (
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1 shrink-0">
+                                    <button type="button" onClick={() => startEdit(msg)} className="p-1.5 bg-white dark:bg-slate-800 rounded-full shadow-sm text-slate-500 hover:text-amber-500" title="Editar"><Edit2 size={12} /></button>
+                                    <button type="button" onClick={() => startReply(msg)} className="p-1.5 bg-white dark:bg-slate-800 rounded-full shadow-sm text-slate-500 hover:text-blue-500" title="Responder"><Reply size={12} /></button>
+                                  </div>
+                                )}
+
+                                {/* Balão da Mensagem */}
+                                <div className={`relative p-3 rounded-2xl shadow-sm ${isMe ? `${theme.bg} text-white rounded-tr-sm` : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-sm'}`}>
+
+                                  {msg.replyTo && (
+                                    <div className={`mb-2 p-2 rounded-lg text-[11px] opacity-90 border-l-2 ${isMe ? 'bg-white/20 border-white' : 'bg-slate-100 dark:bg-slate-700/50 border-slate-400'}`}>
+                                      <span className="font-bold block mb-0.5">{msg.replyTo.senderName}</span>
+                                      <span className="truncate block max-w-full">{msg.replyTo.text}</span>
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
+                                  
+                                  <div className={`text-[9px] mt-1.5 text-right ${isMe ? 'text-white/70' : 'text-slate-400 dark:text-slate-500'}`}>
+                                    {new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+                                    {msg.isEdited && ' (editado)'}
+                                  </div>
+                                </div>
+
+                                {/* Ações lado Direito (se NÃO for minha mensagem) */}
+                                {!isMe && (
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1 shrink-0">
+                                    <button type="button" onClick={() => startReply(msg)} className="p-1.5 bg-white dark:bg-slate-800 rounded-full shadow-sm text-slate-500 hover:text-blue-500" title="Responder"><Reply size={12} /></button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div ref={messagesEndRef} />
+                      </div>
+
+                      {/* Rodapé: Input de Texto */}
+                      <div className="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                        {(replyingTo || editingMsg) && (
+                          <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/50 p-2 rounded-lg mb-2">
+                            <div className="text-xs text-slate-600 dark:text-slate-300 truncate pr-2">
+                              {replyingTo ? (
+                                <><span className="font-bold">Respondendo {replyingTo.senderName}:</span> {replyingTo.text}</>
+                              ) : (
+                                <><span className="font-bold">Editando:</span> {editingMsg.text}</>
+                              )}
+                            </div>
+                            <button type="button" onClick={() => { setReplyingTo(null); setEditingMsg(null); setInputText(''); }} className="text-slate-400 hover:text-rose-500">
+                              <XCircle size={14} />
+                            </button>
+                          </div>
+                        )}
+                        
+                        <form onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSend(e);
+                          const textarea = e.target.querySelector('textarea');
+                          if (textarea) {
+                            textarea.style.height = '44px'; // Reseta a altura após o envio
+                          }
+                        }} className="flex items-end gap-2 relative">
+                          <textarea 
+                            rows="1"
+                            placeholder="Digite sua mensagem..." 
+                            className={`flex-1 px-4 py-2.5 text-sm bg-slate-100 dark:bg-slate-900 border border-transparent rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 dark:text-white resize-none custom-scrollbar`}
+                            style={{ 
+                              minHeight: '44px', // Altura inicial (1 linha)
+                              maxHeight: '120px', // Altura máxima (~5 linhas dependendo do font-size e padding)
+                              height: '44px' // Força iniciar com a altura mínima
+                            }}
+                            value={inputText}
+                            onChange={e => {
+                              setInputText(e.target.value);
+                              // A mágica acontece aqui: zera a altura, e depois define para o scrollHeight
+                              e.target.style.height = '44px'; 
+                              const newHeight = Math.min(e.target.scrollHeight, 120); // 120px é o limite
+                              e.target.style.height = newHeight + 'px';
+                              
+                              // Se ficou vazio, garante que volte pra 1 linha
+                              if (e.target.value === '') {
+                                 e.target.style.height = '44px';
+                              }
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend(e);
+                                e.target.style.height = '44px'; // Reseta a altura
+                              }
+                            }}
+                          />
+                          <button 
+                            type="submit" 
+                            disabled={!inputText.trim()}
+                            className={`p-2.5 mb-0.5 rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed ${theme.bg} hover:shadow-md hover:-translate-y-0.5 flex-shrink-0`}
+                          >
+                            <Send size={18} />
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           );
         }
 
