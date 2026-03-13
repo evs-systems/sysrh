@@ -3482,14 +3482,42 @@
                 docPdf.setFillColor(245, 245, 245);
                 docPdf.rect(startX + 10, currentY, w - 20, 35, "F");
                 
-                docPdf.setFont("helvetica", "italic");
                 docPdf.setFontSize(9);
                 const entity = pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type;
-                const textDecl = `Declaro ter recebido ${pay.category !== 'other' ? 'da empresa' : 'o valor referente a'} ${entity}, o valor de ${formatCurrency(pay.amount)}, referente a ${pay.type}.`;
                 
-                // Quebra o texto automaticamente para caber na caixa
-                const splitText = docPdf.splitTextToSize(textDecl, w - 26);
-                docPdf.text(splitText, startX + 13, currentY + 7);
+                // Array definindo os pedaços do texto e se são negrito ou não
+                const richTextParts = [
+                  { text: `Declaro ter recebido ${pay.category !== 'other' ? 'da empresa ' : 'o valor referente a '}`, bold: false },
+                  { text: entity, bold: true },
+                  { text: `, o valor de `, bold: false },
+                  { text: formatCurrency(pay.amount), bold: true },
+                  { text: `, referente a `, bold: false },
+                  { text: `${pay.type}.`, bold: true }
+                ];
+                
+                let curX = startX + 13;
+                let curY = currentY + 7;
+                const maxW = w - 26;
+                
+                // Lógica para quebrar o texto dinamicamente e manter o estilo
+                richTextParts.forEach(part => {
+                  docPdf.setFont("helvetica", part.bold ? "bolditalic" : "italic");
+                  const words = part.text.split(/(\s+)/); // Separa preservando os espaços
+                  words.forEach(word => {
+                    if (!word) return;
+                    const wordW = docPdf.getTextWidth(word);
+                    // Se a palavra estourar o limite da caixa, pula para a linha de baixo
+                    if (word.trim() !== "" && curX + wordW > startX + 13 + maxW && curX > startX + 13) {
+                      curX = startX + 13;
+                      curY += 5; // Espaçamento entre as linhas
+                    }
+                    // Não imprime espaços isolados no início de uma nova linha
+                    if (!(word.trim() === "" && curX === startX + 13)) {
+                      docPdf.text(word, curX, curY);
+                      curX += wordW;
+                    }
+                  });
+                });
                 
                 // Bloco de Assinatura do Recebedor no fim do quadro
                 const sigY = startY + h - 25;
