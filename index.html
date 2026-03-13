@@ -3396,9 +3396,9 @@
             }
 
             return (
-              <div className="print-container bg-white text-black z-50">
+              <div className="print-container text-black">
                 {pages.map((pageGroup, pageIdx) => (
-                  <div key={pageIdx} className={`w-full flex gap-6 p-4 box-border ${pageIdx < pages.length - 1 ? 'page-break' : ''}`} style={{ height: '95vh', overflow: 'hidden' }}>
+                  <div key={pageIdx} className={`w-full grid grid-cols-2 gap-8 p-2 ${pageIdx < pages.length - 1 ? 'page-break' : ''}`}>
                     {pageGroup.map((pay, idx) => {
                       const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
                       const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
@@ -3408,7 +3408,7 @@
                       const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
                       
                       return (
-                        <div key={idx} className="flex-1 w-1/2 p-6 border-2 border-dashed border-gray-400 rounded-xl flex flex-col justify-between break-inside-avoid">
+                        <div key={idx} className="p-6 border-2 border-dashed border-gray-400 rounded-xl flex flex-col break-inside-avoid" style={{ minHeight: '170mm' }}>
                           <div>
                             <div className="text-center border-b-2 border-gray-800 pb-3 mb-6">
                               <h1 className="text-xl font-bold uppercase tracking-widest">Recibo de Pagamento</h1>
@@ -3435,7 +3435,7 @@
                             </div>
                           </div>
 
-                          <div className="mt-8 flex justify-center items-end">
+                          <div className="mt-auto flex justify-center items-end pt-8">
                             <div className="w-3/4 text-center">
                               <div className="border-t border-black pt-2">
                                 Assinatura do Recebedor<br/>
