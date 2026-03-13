@@ -1453,7 +1453,7 @@
         }
 
         function DashboardView({ theme, employees, payments, disciplinary }) {
-          const activeEmployees = employees.filter(e => e.status !== 'Desligado');
+          const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
           const stats = [
             { title: 'Total de Funcionários Ativos', value: activeEmployees.length, icon: Users, color: 'text-blue-500' },
@@ -2438,9 +2438,11 @@
             name: '', birthDate: '', gender: 'Feminino', isMarried: 'Não', cpf: '', rg: '', contact: '', email: '',
             role: '', department: '', baseSalary: '', company: '', cnpj: '', unit: '', workSector: '',
             workShiftStart: '', workShiftEnd: '', admissionExamDate: '', probation45: '', probation90: '',
+            saturdayShift: 'Não trabalha', saturdayShiftTeam: '',
             cep: '', street: '', number: '', complement: '', neighborhood: '', state: '',
             bankName: '', agency: '', account: '', pixType: 'CPF', pixKey: '',
             healthInsurance: 'Não', healthInsuranceValue: '', hasDependents: 'Não', dependentsCount: '', dependentsValue: '', fuelAllowance: 'Não',
+            transportVoucher: 'Não', transportCards: [{ valuePerDay: '' }],
             hasChildren: 'Não', children: [{ name: '', birthDate: '' }],
             hasLoans: 'Não', loans: [{ loanMonth: '', deadlineMonth: '', totalAmount: '', installmentsCount: '', installmentValue: '' }],
             documents: [],
@@ -2474,8 +2476,8 @@
 
           const filtered = currentList.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.cpf.includes(searchTerm));
           
-          // Ordena pelos mais recentes e limita a exibição
-          const sortedFiltered = [...filtered].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+          // Ordena alfabeticamente pelo nome e limita a exibição
+          const sortedFiltered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
           const displayedEmployees = sortedFiltered.slice(0, visibleCount);
 
           const openModal = (emp = null) => {
@@ -2594,6 +2596,22 @@
           const removeLoan = (index) => {
             requestConfirm('Tem certeza que deseja remover este empréstimo?', () => {
               setFormData(prev => ({...prev, loans: (prev.loans || []).filter((_, i) => i !== index)}));
+            });
+          };
+
+          const handleTransportCardChange = (index, value) => {
+            const newCards = [...(formData.transportCards || [])];
+            newCards[index].valuePerDay = value;
+            setFormData({ ...formData, transportCards: newCards });
+          };
+
+          const addTransportCard = () => {
+            setFormData({...formData, transportCards: [...(formData.transportCards || []), { valuePerDay: '' }]});
+          };
+          
+          const removeTransportCard = (index) => {
+            requestConfirm('Tem certeza que deseja remover este cartão de transporte?', () => {
+              setFormData(prev => ({...prev, transportCards: (prev.transportCards || []).filter((_, i) => i !== index)}));
             });
           };
 
@@ -2920,6 +2938,22 @@
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
                           <Select label="Horário de Entrada (Turno)" theme={theme} required value={formData.workShiftStart} onChange={e => setFormData({...formData, workShiftStart: e.target.value})} options={SHIFT_TIME_OPTIONS} />
                           <Select label="Horário de Saída (Turno)" theme={theme} required value={formData.workShiftEnd} onChange={e => setFormData({...formData, workShiftEnd: e.target.value})} options={SHIFT_TIME_OPTIONS} />
+                          
+                          <Select 
+                            label="Escala de Sábado" theme={theme} required value={formData.saturdayShift || 'Não trabalha'} 
+                            onChange={e => setFormData({...formData, saturdayShift: e.target.value})}
+                            options={[ {value: 'Não trabalha', label: 'Não trabalha'}, {value: 'Todos os sábados', label: 'Todos os sábados'}, {value: 'Sábados alternados', label: 'Sábados alternados'} ]} 
+                          />
+                          
+                          {formData.saturdayShift === 'Sábados alternados' && (
+                            <div className="animate-in fade-in zoom-in-95 duration-300">
+                              <Select 
+                                label="Equipe de Escala" theme={theme} required value={formData.saturdayShiftTeam || ''} 
+                                onChange={e => setFormData({...formData, saturdayShiftTeam: e.target.value})}
+                                options={[ {value: 'Escala 1 (Jeniffer)', label: 'Escala 1 (Jeniffer)'}, {value: 'Escala 2 (Thalia)', label: 'Escala 2 (Thalia)'} ]} 
+                              />
+                            </div>
+                          )}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
                           <Select 
@@ -2977,6 +3011,52 @@
                             </>
                           )}
                         </div>
+
+                        {/* NOVO CAMPO: VALE TRANSPORTE */}
+                        <div className="mt-4">
+                          <Select 
+                            label="Recebe Vale Transporte?" theme={theme} required value={formData.transportVoucher || 'Não'} 
+                            onChange={e => setFormData({...formData, transportVoucher: e.target.value})}
+                            options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
+                          />
+                        </div>
+
+                        {formData.transportVoucher === 'Sim' && (
+                          <div className="space-y-3 p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 mt-2 animate-in fade-in slide-in-from-top-2">
+                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Cartões de Transporte</h4>
+                            {(formData.transportCards || [{ valuePerDay: '' }]).map((card, index) => (
+                              <div key={index} className="flex flex-col md:flex-row gap-4 items-end relative pb-4 mb-4 border-b border-slate-200/50 dark:border-slate-700/50 last:border-0 last:mb-0 last:pb-0">
+                                <Input 
+                                  label={`Valor Diário do Cartão ${index + 1} (R$)`} 
+                                  type="text" 
+                                  theme={theme} 
+                                  required 
+                                  className="flex-[2]"
+                                  value={displayCurrencyMask(card.valuePerDay)} 
+                                  onChange={e => handleTransportCardChange(index, formatCurrencyInput(e.target.value))} 
+                                />
+                                {(formData.transportCards || []).length > 1 && (
+                                  <button type="button" onClick={() => removeTransportCard(index)} className="p-2.5 mb-[2px] bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors" title="Remover Cartão">
+                                    <X size={18} />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            
+                            {(formData.transportCards || []).length > 1 && (
+                              <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50 mb-3">
+                                <span className="text-sm font-bold text-blue-800 dark:text-blue-300">Total Diário (Somado):</span>
+                                <span className="text-lg font-black text-blue-600 dark:text-blue-400">
+                                  {formatCurrency((formData.transportCards || []).reduce((acc, curr) => acc + Number(curr.valuePerDay || 0), 0))}
+                                </span>
+                              </div>
+                            )}
+
+                            <Button type="button" variant="ghost" theme={theme} icon={Plus} onClick={addTransportCard} className="w-full border border-dashed border-slate-300 dark:border-slate-600">
+                              Adicionar outro cartão
+                            </Button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
@@ -3308,55 +3388,64 @@
 
           if (isPrinting) {
             const paymentsToPrint = payments.filter(p => printSelections[p.id]);
+            
+            // Agrupa os pagamentos de 2 em 2 para imprimir lado a lado (horizontal)
+            const pages = [];
+            for (let i = 0; i < paymentsToPrint.length; i += 2) {
+              pages.push(paymentsToPrint.slice(i, i + 2));
+            }
+
             return (
-              <div className="print-container bg-white text-black min-h-screen z-50">
-                {paymentsToPrint.map((pay, idx) => {
-                  const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
-                  const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
-                  const refMonth = pay.date && pay.date.includes('/') ? pay.date.substring(3) : pay.date; 
-                  
-                  return (
-                    <div key={idx} className={`p-10 border-2 border-dashed border-gray-300 m-8 rounded-xl ${idx % 2 === 1 ? 'page-break' : 'mb-16'}`}>
-                      <div className="text-center border-b-2 border-gray-800 pb-4 mb-6">
-                        <h1 className="text-2xl font-bold uppercase tracking-widest">Recibo de Pagamento</h1>
-                        <h2 className="text-xl text-gray-600">{pay.type}</h2>
-                      </div>
+              <div className="print-container bg-white text-black z-50">
+                {pages.map((pageGroup, pageIdx) => (
+                  <div key={pageIdx} className={`w-full grid grid-cols-2 gap-6 p-4 ${pageIdx < pages.length - 1 ? 'page-break' : ''}`} style={{ height: '98vh' }}>
+                    {pageGroup.map((pay, idx) => {
+                      const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
+                      const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
+                      const refMonth = pay.date && pay.date.includes('/') ? pay.date.substring(3) : pay.date; 
                       
-                      <div className="grid grid-cols-2 gap-6 mb-8 text-lg">
-                        <div>
-                          <p><span className="font-bold">{pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:'}</span> {payeeName}</p>
-                          {pay.category !== 'other' && <p><span className="font-bold">CPF:</span> {formatCPF(emp?.cpf)}</p>}
-                          {pay.category !== 'other' && <p><span className="font-bold">Cargo:</span> {emp?.role || '-'}</p>}
-                        </div>
-                        <div className="text-right">
-                          <p><span className="font-bold">Valor:</span> {formatCurrency(pay.amount)}</p>
-                          <p><span className="font-bold">Referência:</span> {refMonth}</p>
-                          <p><span className="font-bold">Data de Emissão:</span> {new Date().toLocaleDateString('pt-BR')}</p>
-                        </div>
-                      </div>
+                      // Usa a data real de pagamento (se existir), senão usa a data programada
+                      const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
+                      
+                      return (
+                        <div key={idx} className="p-8 border-2 border-dashed border-gray-300 rounded-xl flex flex-col h-full">
+                          <div className="text-center border-b-2 border-gray-800 pb-4 mb-6">
+                            <h1 className="text-xl font-bold uppercase tracking-widest">Recibo de Pagamento</h1>
+                            <h2 className="text-lg text-gray-600">{pay.type}</h2>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
+                            <div>
+                              <p><span className="font-bold">{pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:'}</span> {payeeName}</p>
+                              {pay.category !== 'other' && <p><span className="font-bold">CPF:</span> {formatCPF(emp?.cpf)}</p>}
+                              {pay.category !== 'other' && <p><span className="font-bold">Cargo:</span> {emp?.role || '-'}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p><span className="font-bold">Valor:</span> {formatCurrency(pay.amount)}</p>
+                              <p><span className="font-bold">Referência:</span> {refMonth}</p>
+                              <p><span className="font-bold">Data de Pagamento:</span> {paymentDate}</p>
+                            </div>
+                          </div>
 
-                      <div className="bg-gray-100 p-4 rounded-lg text-sm mb-16 italic text-justify">
-                        Declaro ter recebido {pay.category !== 'other' ? `da empresa ` : `o valor referente a `} 
-                        <strong>{pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type}</strong>, 
-                        o valor de <strong>{formatCurrency(pay.amount)}</strong>, de acordo com as normas da empresa.
-                      </div>
+                          <div className="bg-gray-100 p-4 rounded-lg text-sm mb-auto italic text-justify">
+                            Declaro ter recebido {pay.category !== 'other' ? `da empresa ` : `o valor referente a `} 
+                            <strong>{pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type}</strong>, 
+                            o valor de <strong>{formatCurrency(pay.amount)}</strong>, referente a <strong>{pay.type}</strong>.
+                          </div>
 
-                      <div className="mt-16 pt-8 flex justify-between items-end border-t border-gray-200">
-                        <div className="w-1/2 text-center">
-                          <div className="border-t border-black pt-2 mx-8 mt-12">
-                            Assinatura do Emissor
+                          <div className="mt-12 flex justify-center items-end pt-4">
+                            <div className="w-3/4 text-center">
+                              <div className="border-t border-black pt-2">
+                                Assinatura do Recebedor<br/>
+                                <span className="text-xs text-gray-500 font-bold mt-1 inline-block">{payeeName}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="w-1/2 text-center">
-                          <div className="border-t border-black pt-2 mx-8 mt-12">
-                            Assinatura do Recebedor<br/>
-                            <span className="text-xs text-gray-500">{payeeName}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                ))}
                 {paymentsToPrint.length === 0 && <p className="p-10">Nenhum comprovante selecionado.</p>}
               </div>
             );
@@ -3918,7 +4007,9 @@
                                     {canWrite && (
                                       <button 
                                         onClick={() => openPayModal(pay)}
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:hover:bg-blue-900/60 transition-colors"
+                                        disabled={pay.isVerified === false}
+                                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${pay.isVerified === false ? 'bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:hover:bg-blue-900/60'}`}
+                                        title={pay.isVerified === false ? "Aguardando conferência" : "Efetuar Pagamento"}
                                       >
                                         <CheckCircle size={16} /> Pagar
                                       </button>
