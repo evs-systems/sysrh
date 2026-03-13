@@ -3389,7 +3389,7 @@
           if (isPrinting) {
             const paymentsToPrint = payments.filter(p => printSelections[p.id]);
             
-            // Agrupa os pagamentos de 2 em 2 para imprimir lado a lado (horizontal)
+            // Agrupar em pares (2 recibos por página)
             const pages = [];
             for (let i = 0; i < paymentsToPrint.length; i += 2) {
               pages.push(paymentsToPrint.slice(i, i + 2));
@@ -3398,7 +3398,7 @@
             return (
               <div className="print-container bg-white text-black z-50">
                 {pages.map((pageGroup, pageIdx) => (
-                  <div key={pageIdx} className={`w-full grid grid-cols-2 gap-6 p-4 ${pageIdx < pages.length - 1 ? 'page-break' : ''}`} style={{ minHeight: '90vh' }}>
+                  <div key={pageIdx} className={`w-full flex gap-6 p-4 box-border ${pageIdx < pages.length - 1 ? 'page-break' : ''}`} style={{ height: '95vh', overflow: 'hidden' }}>
                     {pageGroup.map((pay, idx) => {
                       const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
                       const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
@@ -3408,36 +3408,38 @@
                       const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
                       
                       return (
-                        <div key={idx} className="p-8 border-2 border-dashed border-gray-300 rounded-xl flex flex-col h-full relative break-inside-avoid">
-                          <div className="text-center border-b-2 border-gray-800 pb-4 mb-6">
-                            <h1 className="text-xl font-bold uppercase tracking-widest">Recibo de Pagamento</h1>
-                            <h2 className="text-lg text-gray-600">{pay.type}</h2>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
-                            <div>
-                              <p><span className="font-bold">{pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:'}</span> {payeeName}</p>
-                              {pay.category !== 'other' && <p><span className="font-bold">CPF:</span> {formatCPF(emp?.cpf)}</p>}
-                              {pay.category !== 'other' && <p><span className="font-bold">Cargo:</span> {emp?.role || '-'}</p>}
+                        <div key={idx} className="flex-1 w-1/2 p-6 border-2 border-dashed border-gray-400 rounded-xl flex flex-col justify-between break-inside-avoid">
+                          <div>
+                            <div className="text-center border-b-2 border-gray-800 pb-3 mb-6">
+                              <h1 className="text-xl font-bold uppercase tracking-widest">Recibo de Pagamento</h1>
+                              <h2 className="text-lg text-gray-600">{pay.type}</h2>
                             </div>
-                            <div className="text-right">
-                              <p><span className="font-bold">Valor:</span> {formatCurrency(pay.amount)}</p>
-                              <p><span className="font-bold">Referência:</span> {refMonth}</p>
-                              <p><span className="font-bold">Data de Pagamento:</span> {paymentDate}</p>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                              <div>
+                                <p><span className="font-bold">{pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:'}</span> {payeeName}</p>
+                                {pay.category !== 'other' && <p><span className="font-bold">CPF:</span> {formatCPF(emp?.cpf)}</p>}
+                                {pay.category !== 'other' && <p><span className="font-bold">Cargo:</span> {emp?.role || '-'}</p>}
+                              </div>
+                              <div className="text-right">
+                                <p><span className="font-bold">Valor:</span> {formatCurrency(pay.amount)}</p>
+                                <p><span className="font-bold">Referência:</span> {refMonth}</p>
+                                <p><span className="font-bold">Data Pagamento:</span> {paymentDate}</p>
+                              </div>
+                            </div>
+
+                            <div className="bg-gray-100 p-4 rounded-lg text-sm mb-4 italic text-justify leading-relaxed">
+                              Declaro ter recebido {pay.category !== 'other' ? `da empresa ` : `o valor referente a `} 
+                              <strong>{pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type}</strong>, 
+                              o valor de <strong>{formatCurrency(pay.amount)}</strong>, referente a <strong>{pay.type}</strong>.
                             </div>
                           </div>
 
-                          <div className="bg-gray-100 p-4 rounded-lg text-sm mb-auto italic text-justify">
-                            Declaro ter recebido {pay.category !== 'other' ? `da empresa ` : `o valor referente a `} 
-                            <strong>{pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type}</strong>, 
-                            o valor de <strong>{formatCurrency(pay.amount)}</strong>, referente a <strong>{pay.type}</strong>.
-                          </div>
-
-                          <div className="mt-12 flex justify-center items-end pt-4">
+                          <div className="mt-8 flex justify-center items-end">
                             <div className="w-3/4 text-center">
                               <div className="border-t border-black pt-2">
                                 Assinatura do Recebedor<br/>
-                                <span className="text-xs text-gray-500 font-bold mt-1 inline-block">{payeeName}</span>
+                                <span className="text-xs text-gray-600 font-bold mt-1 inline-block">{payeeName}</span>
                               </div>
                             </div>
                           </div>
