@@ -3376,11 +3376,17 @@
             setPrintSelections(newState);
           };
 
-          const handlePrint = () => {
+          const handlePrint = async () => {
             logAction('Impressão', 'Pagamentos', `Gerou PDF com ${selectedPrintCount} comprovante(s) de pagamento.`);
             setIsPrinting(true);
             
             try {
+              showToast('Gerando comprovantes, aguarde...', 'success');
+              
+              // Importação dinâmica e 100% segura direto do CDN em formato módulo
+              const jspdfModule = await import('https://esm.sh/jspdf@2.5.1');
+              const jsPDF = jspdfModule.jsPDF;
+              
               // Criação do documento A4 em formato Paisagem (Landscape)
               const docPdf = new jsPDF({ orientation: 'landscape', format: 'a4' });
               const paymentsToPrint = payments.filter(p => printSelections[p.id]);
@@ -3405,7 +3411,7 @@
                 docPdf.setLineWidth(0.5);
                 docPdf.setLineDashPattern([3, 3], 0);
                 docPdf.rect(startX, startY, w, h);
-                docPdf.setLineDashPattern([], 0); // Reseta a linha para continua no resto do doc
+                docPdf.setLineDashPattern([], 0); // Reseta a linha para continuar sólida no resto do doc
                 
                 // Cabeçalho
                 docPdf.setFont("helvetica", "bold");
@@ -3498,13 +3504,13 @@
                 docPdf.text(payeeName || "-", startX + w/2, sigY + 10, { align: "center" });
               }
               
-              // Gera a URL (Blob) do PDF pronto e abre numa nova aba
+              // Gera a URL (Blob) do PDF pronto e abre numa nova aba para visualização/impressão nativa
               window.open(docPdf.output('bloburl'), '_blank');
               setPrintSelections({});
               
             } catch (err) {
               console.error("Erro ao gerar PDF:", err);
-              showToast('Erro ao gerar PDF de recibos.', 'error');
+              showToast('Erro ao gerar PDF de recibos. Tente novamente.', 'error');
             } finally {
               setIsPrinting(false);
             }
