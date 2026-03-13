@@ -3396,9 +3396,9 @@
             }
 
             return (
-              <div className="print-container bg-white text-black z-50 absolute top-0 left-0 w-full">
+              <div className="print-container bg-white text-black z-50">
                 {pages.map((pageGroup, pageIdx) => (
-                  <div key={pageIdx} className={`w-full grid grid-cols-2 gap-6 p-4 ${pageIdx < pages.length - 1 ? 'page-break' : ''}`} style={{ height: '98vh', pageBreakAfter: 'always' }}>
+                  <div key={pageIdx} className={`w-full grid grid-cols-2 gap-6 p-4 ${pageIdx < pages.length - 1 ? 'page-break' : ''}`} style={{ minHeight: '90vh' }}>
                     {pageGroup.map((pay, idx) => {
                       const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
                       const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
