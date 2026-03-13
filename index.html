@@ -3377,81 +3377,138 @@
           };
 
           const handlePrint = () => {
-            logAction('Impressão', 'Pagamentos', `Gerou e imprimiu ${selectedPrintCount} comprovante(s) de pagamento.`);
+            logAction('Impressão', 'Pagamentos', `Gerou PDF com ${selectedPrintCount} comprovante(s) de pagamento.`);
             setIsPrinting(true);
-            setTimeout(() => {
-              window.print();
-              setIsPrinting(false);
-              setPrintSelections({});
-            }, 500);
-          };
-
-          if (isPrinting) {
-            const paymentsToPrint = payments.filter(p => printSelections[p.id]);
             
-            // Agrupar em pares (2 recibos por página)
-            const pages = [];
-            for (let i = 0; i < paymentsToPrint.length; i += 2) {
-              pages.push(paymentsToPrint.slice(i, i + 2));
+            try {
+              // Criação do documento A4 em formato Paisagem (Landscape)
+              const docPdf = new jsPDF({ orientation: 'landscape', format: 'a4' });
+              const paymentsToPrint = payments.filter(p => printSelections[p.id]);
+              
+              for (let i = 0; i < paymentsToPrint.length; i++) {
+                // A cada 2 recibos, adiciona uma nova folha
+                if (i > 0 && i % 2 === 0) {
+                  docPdf.addPage();
+                }
+                
+                const pay = paymentsToPrint[i];
+                const isLeft = i % 2 === 0; // Se é par, desenha na esquerda; se é ímpar, na direita
+                
+                // Coordenadas base: Esquerda = margem 15mm | Direita = Centro (148.5) + margem aprox 10 = 158mm
+                const startX = isLeft ? 15 : 158; 
+                const startY = 15;
+                const w = 124; // Largura do quadro do recibo
+                const h = 180; // Altura do quadro do recibo
+                
+                // Desenha a Borda (Tracejada)
+                docPdf.setDrawColor(150, 150, 150);
+                docPdf.setLineWidth(0.5);
+                docPdf.setLineDashPattern([3, 3], 0);
+                docPdf.rect(startX, startY, w, h);
+                docPdf.setLineDashPattern([], 0); // Reseta a linha para continua no resto do doc
+                
+                // Cabeçalho
+                docPdf.setFont("helvetica", "bold");
+                docPdf.setFontSize(14);
+                docPdf.text("RECIBO DE PAGAMENTO", startX + w/2, startY + 15, { align: "center" });
+                
+                docPdf.setFont("helvetica", "normal");
+                docPdf.setFontSize(12);
+                docPdf.text((pay.type || '').toUpperCase(), startX + w/2, startY + 22, { align: "center" });
+                
+                // Linha Separadora do Cabeçalho
+                docPdf.setDrawColor(200, 200, 200);
+                docPdf.line(startX + 10, startY + 28, startX + w - 10, startY + 28);
+                
+                // Processamento dos Dados
+                const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
+                const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
+                const refMonth = pay.date && pay.date.includes('/') ? pay.date.substring(3) : pay.date; 
+                const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
+                
+                let currentY = startY + 40;
+                docPdf.setFontSize(10);
+                
+                // Linha 1: Nome
+                docPdf.setFont("helvetica", "bold");
+                docPdf.text(pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:', startX + 10, currentY);
+                docPdf.setFont("helvetica", "normal");
+                docPdf.text(payeeName || "-", startX + 40, currentY);
+                currentY += 8;
+                
+                // Linhas exclusivas para funcionário (CPF e Cargo)
+                if (pay.category !== 'other') {
+                  docPdf.setFont("helvetica", "bold");
+                  docPdf.text("CPF:", startX + 10, currentY);
+                  docPdf.setFont("helvetica", "normal");
+                  docPdf.text(formatCPF(emp?.cpf) || "-", startX + 40, currentY);
+                  currentY += 8;
+                  
+                  docPdf.setFont("helvetica", "bold");
+                  docPdf.text("Cargo:", startX + 10, currentY);
+                  docPdf.setFont("helvetica", "normal");
+                  docPdf.text(emp?.role || "-", startX + 40, currentY);
+                  currentY += 8;
+                }
+                
+                // Linha: Valor
+                docPdf.setFont("helvetica", "bold");
+                docPdf.text("Valor:", startX + 10, currentY);
+                docPdf.setFont("helvetica", "normal");
+                docPdf.text(formatCurrency(pay.amount), startX + 40, currentY);
+                currentY += 8;
+                
+                // Linha: Referência
+                docPdf.setFont("helvetica", "bold");
+                docPdf.text("Referência:", startX + 10, currentY);
+                docPdf.setFont("helvetica", "normal");
+                docPdf.text(refMonth || "-", startX + 40, currentY);
+                currentY += 8;
+                
+                // Linha: Data Pagto
+                docPdf.setFont("helvetica", "bold");
+                docPdf.text("Data Pagto:", startX + 10, currentY);
+                docPdf.setFont("helvetica", "normal");
+                docPdf.text(paymentDate || "-", startX + 40, currentY);
+                currentY += 15;
+                
+                // Bloco Cinza de Declaração
+                docPdf.setFillColor(245, 245, 245);
+                docPdf.rect(startX + 10, currentY, w - 20, 35, "F");
+                
+                docPdf.setFont("helvetica", "italic");
+                docPdf.setFontSize(9);
+                const entity = pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type;
+                const textDecl = `Declaro ter recebido ${pay.category !== 'other' ? 'da empresa' : 'o valor referente a'} ${entity}, o valor de ${formatCurrency(pay.amount)}, referente a ${pay.type}.`;
+                
+                // Quebra o texto automaticamente para caber na caixa
+                const splitText = docPdf.splitTextToSize(textDecl, w - 26);
+                docPdf.text(splitText, startX + 13, currentY + 7);
+                
+                // Bloco de Assinatura do Recebedor no fim do quadro
+                const sigY = startY + h - 25;
+                docPdf.setDrawColor(0);
+                docPdf.setLineWidth(0.5);
+                docPdf.line(startX + 20, sigY, startX + w - 20, sigY);
+                
+                docPdf.setFont("helvetica", "normal");
+                docPdf.setFontSize(9);
+                docPdf.text("Assinatura do Recebedor", startX + w/2, sigY + 5, { align: "center" });
+                docPdf.setFont("helvetica", "bold");
+                docPdf.text(payeeName || "-", startX + w/2, sigY + 10, { align: "center" });
+              }
+              
+              // Gera a URL (Blob) do PDF pronto e abre numa nova aba
+              window.open(docPdf.output('bloburl'), '_blank');
+              setPrintSelections({});
+              
+            } catch (err) {
+              console.error("Erro ao gerar PDF:", err);
+              showToast('Erro ao gerar PDF de recibos.', 'error');
+            } finally {
+              setIsPrinting(false);
             }
-
-            return (
-              <div className="print-container text-black">
-                {pages.map((pageGroup, pageIdx) => (
-                  <div key={pageIdx} className={`w-full grid grid-cols-2 gap-8 p-2 ${pageIdx < pages.length - 1 ? 'page-break' : ''}`}>
-                    {pageGroup.map((pay, idx) => {
-                      const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
-                      const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
-                      const refMonth = pay.date && pay.date.includes('/') ? pay.date.substring(3) : pay.date; 
-                      
-                      // Usa a data real de pagamento (se existir), senão usa a data programada
-                      const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
-                      
-                      return (
-                        <div key={idx} className="p-6 border-2 border-dashed border-gray-400 rounded-xl flex flex-col break-inside-avoid" style={{ minHeight: '170mm' }}>
-                          <div>
-                            <div className="text-center border-b-2 border-gray-800 pb-3 mb-6">
-                              <h1 className="text-xl font-bold uppercase tracking-widest">Recibo de Pagamento</h1>
-                              <h2 className="text-lg text-gray-600">{pay.type}</h2>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-                              <div>
-                                <p><span className="font-bold">{pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:'}</span> {payeeName}</p>
-                                {pay.category !== 'other' && <p><span className="font-bold">CPF:</span> {formatCPF(emp?.cpf)}</p>}
-                                {pay.category !== 'other' && <p><span className="font-bold">Cargo:</span> {emp?.role || '-'}</p>}
-                              </div>
-                              <div className="text-right">
-                                <p><span className="font-bold">Valor:</span> {formatCurrency(pay.amount)}</p>
-                                <p><span className="font-bold">Referência:</span> {refMonth}</p>
-                                <p><span className="font-bold">Data Pagamento:</span> {paymentDate}</p>
-                              </div>
-                            </div>
-
-                            <div className="bg-gray-100 p-4 rounded-lg text-sm mb-4 italic text-justify leading-relaxed">
-                              Declaro ter recebido {pay.category !== 'other' ? `da empresa ` : `o valor referente a `} 
-                              <strong>{pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type}</strong>, 
-                              o valor de <strong>{formatCurrency(pay.amount)}</strong>, referente a <strong>{pay.type}</strong>.
-                            </div>
-                          </div>
-
-                          <div className="mt-auto flex justify-center items-end pt-8">
-                            <div className="w-3/4 text-center">
-                              <div className="border-t border-black pt-2">
-                                Assinatura do Recebedor<br/>
-                                <span className="text-xs text-gray-600 font-bold mt-1 inline-block">{payeeName}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-                {paymentsToPrint.length === 0 && <p className="p-10">Nenhum comprovante selecionado.</p>}
-              </div>
-            );
-          }
+          };
 
           const handleCategoryChange = (val) => {
             setFormData(prev => ({
