@@ -1783,6 +1783,7 @@
           const [filterRole, setFilterRole] = useState('');
           const [filterUnit, setFilterUnit] = useState('');
           const [filterSector, setFilterSector] = useState('');
+          const [filterStatus, setFilterStatus] = useState('');
           
           const [visibleCount, setVisibleCount] = useState(50);
 
@@ -1800,7 +1801,7 @@
           // Repõe a contagem visível sempre que o utilizador muda de aba ou faz uma pesquisa
           useEffect(() => {
             setVisibleCount(50);
-          }, [activeSubTab, searchTerm, filterCompany, filterRole, filterUnit, filterSector, filterMonth, filterYear]);
+          }, [activeSubTab, searchTerm, filterCompany, filterRole, filterUnit, filterSector, filterStatus, filterMonth, filterYear]);
 
           const monthOptions = [
             { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -1815,27 +1816,44 @@
             { value: String(today.getFullYear() + 1), label: String(today.getFullYear() + 1) }
           ];
 
-          // Estado local para as faltas
+          // Estado local para as faltas (VT e Combustível)
           const [localAbsences, setLocalAbsences] = useState({});
           const [originalAbsences, setOriginalAbsences] = useState({});
 
-          // Estados para o Modal de Pagamento do VT
+          const [localFuelAbsences, setLocalFuelAbsences] = useState({});
+          const [originalFuelAbsences, setOriginalFuelAbsences] = useState({});
+
+          // Estados para os Modais de Pagamento
           const [vtPayModalOpen, setVtPayModalOpen] = useState(false);
           const [vtEmployeeToPay, setVtEmployeeToPay] = useState(null);
           const [vtPayForm, setVtPayForm] = useState([{ method: 'Site SpTrans', date: '', amount: '' }]);
+
+          const [fuelPayModalOpen, setFuelPayModalOpen] = useState(false);
+          const [fuelEmployeeToPay, setFuelEmployeeToPay] = useState(null);
+          const [fuelPayDate, setFuelPayDate] = useState('');
+
+          const [fuelBulkModalOpen, setFuelBulkModalOpen] = useState(false);
+          const [fuelBulkSelected, setFuelBulkSelected] = useState([]);
+          const [fuelBulkDate, setFuelBulkDate] = useState('');
 
           const safeEmployees = Array.isArray(employees) ? employees : [];
           const activeEmployees = safeEmployees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
           useEffect(() => {
             const loadedAbsences = {};
+            const loadedFuelAbsences = {};
             activeEmployees.forEach(emp => {
               if (emp.transportAbsences && emp.transportAbsences[monthKey] !== undefined) {
                 loadedAbsences[emp.id] = emp.transportAbsences[monthKey];
               }
+              if (emp.fuelAbsences && emp.fuelAbsences[monthKey] !== undefined) {
+                loadedFuelAbsences[emp.id] = emp.fuelAbsences[monthKey];
+              }
             });
             setLocalAbsences(loadedAbsences);
             setOriginalAbsences(loadedAbsences);
+            setLocalFuelAbsences(loadedFuelAbsences);
+            setOriginalFuelAbsences(loadedFuelAbsences);
           }, [employees, monthKey]);
 
           const companiesList = [...new Set(activeEmployees.map(e => e.company).filter(Boolean))].sort();
@@ -1897,7 +1915,6 @@
 
           if (activeSubTab === 'transport') {
             currentList = filteredEmps.filter(e => e.transportVoucher === 'Sim').map(e => {
-              // Calcula os dias úteis ESPECÍFICOS deste funcionário
               let empBusinessDays = monthData.baseMonToFri;
               if (e.saturdayShift === 'Todos os sábados') {
                   empBusinessDays += monthData.allSats;
@@ -1929,7 +1946,6 @@
               
               let calcTotal = 0;
 
-              // Congelamento de Valores Históricos
               if (monthPaymentInfo && monthPaymentInfo.lockedTotal !== undefined) {
                  calcTotal = monthPaymentInfo.lockedTotal;
                  dailyTotal = monthPaymentInfo.lockedDailyTotal;
@@ -1937,7 +1953,6 @@
                  empBusinessDays = monthPaymentInfo.lockedBusinessDays || empBusinessDays;
                  parsedCards = monthPaymentInfo.lockedParsedCards || parsedCards;
               } else if (monthPaymentInfo && monthPaymentInfo.status === 'Pago') {
-                 // Fallback para pagamentos antigos (legado) que não tinham o congelamento
                  calcTotal = paidAmount > 0 ? paidAmount : (dailyTotal * payableDays);
               } else {
                  calcTotal = dailyTotal * payableDays;
@@ -1951,13 +1966,12 @@
               let isPartial = false;
 
               if (monthPaymentInfo) {
-                  // Tolera até 1 cêntimo de diferença por arredondamentos
                   if (paidAmount >= (calcTotal - 0.01) && calcTotal > 0) {
                       isPaid = true;
                   } else if (paidAmount > 0 && paidAmount < calcTotal) {
                       isPartial = true;
                   } else if (monthPaymentInfo.status === 'Pago') {
-                      isPaid = true; // Fallback se já estava marcado como pago
+                      isPaid = true; 
                   }
               }
 
@@ -1984,30 +1998,92 @@
             });
           } else if (activeSubTab === 'fuel') {
             currentList = filteredEmps.filter(e => e.fuelAllowance === 'Sim').map(e => {
-              return { ...e, _benefitValue: 0, _details: 'Auxílio Combustível Ativo' };
+              let empBusinessDays = monthData.baseMonToFri;
+              if (e.saturdayShift === 'Todos os sábados') {
+                  empBusinessDays += monthData.allSats;
+              } else if (e.saturdayShift === 'Sábados alternados') {
+                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') {
+                      empBusinessDays += monthData.escala1Sats;
+                  } else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') {
+                      empBusinessDays += monthData.escala2Sats;
+                  }
+              }
+
+              let dailyTotal = Number(e.fuelAllowanceValue) || 0;
+              const empAbsences = Number(localFuelAbsences[e.id]) || 0;
+              const payableDays = Math.max(0, empBusinessDays - empAbsences);
+              
+              const monthPaymentInfo = e.fuelPayments?.[monthKey];
+              let calcTotal = 0;
+
+              if (monthPaymentInfo && monthPaymentInfo.lockedTotal !== undefined) {
+                 calcTotal = monthPaymentInfo.lockedTotal;
+                 dailyTotal = monthPaymentInfo.lockedDailyTotal;
+                 empBusinessDays = monthPaymentInfo.lockedBusinessDays || empBusinessDays;
+              } else {
+                 calcTotal = dailyTotal * payableDays;
+              }
+
+              totalValue += calcTotal;
+              const isPaid = monthPaymentInfo?.status === 'Pago';
+
+              return { 
+                ...e, 
+                _benefitValue: calcTotal, 
+                _dailyTotal: dailyTotal, 
+                _empAbsences: empAbsences, 
+                _empBusinessDays: empBusinessDays,
+                _isPaid: isPaid,
+                _paymentDetails: monthPaymentInfo
+              };
             });
           }
 
+          if (filterStatus) {
+            currentList = currentList.filter(e => {
+                const status = e._isPaid ? 'Pago' : (e._isPartial ? 'Parcial' : 'Pendente');
+                return status === filterStatus;
+            });
+          }
+
+          // Salvar Faltas de VT e Combustível
           const handleAbsenceBlur = async (empId, empName) => {
             if (!canWrite || !db) return;
             const val = Number(localAbsences[empId]) || 0;
             const origVal = Number(originalAbsences[empId]) || 0;
-            
-            if (val === origVal) return; // Evita salvar se não houve alteração real
+            if (val === origVal) return;
 
             try {
               const docRef = doc(db, `${basePath}/employees/${empId}`);
               await setDoc(docRef, { 
                 transportAbsences: { [monthKey]: val },
-                isVerified: false, // Dispara a necessidade de conferência
+                isVerified: false, 
                 lastModifiedBy: appUser.username
               }, { merge: true });
-              
-              setOriginalAbsences(prev => ({ ...prev, [empId]: val })); // Atualiza a base local
+              setOriginalAbsences(prev => ({ ...prev, [empId]: val }));
               logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no VT (${filterMonth}/${filterYear})`);
             } catch (err) {
-              console.error("Erro ao guardar faltas", err);
               showToast('Erro ao guardar faltas no sistema.', 'error');
+            }
+          };
+
+          const handleFuelAbsenceBlur = async (empId, empName) => {
+            if (!canWrite || !db) return;
+            const val = Number(localFuelAbsences[empId]) || 0;
+            const origVal = Number(originalFuelAbsences[empId]) || 0;
+            if (val === origVal) return;
+
+            try {
+              const docRef = doc(db, `${basePath}/employees/${empId}`);
+              await setDoc(docRef, { 
+                fuelAbsences: { [monthKey]: val },
+                isVerified: false,
+                lastModifiedBy: appUser.username
+              }, { merge: true });
+              setOriginalFuelAbsences(prev => ({ ...prev, [empId]: val }));
+              logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no Combustível (${filterMonth}/${filterYear})`);
+            } catch (err) {
+              showToast('Erro ao guardar faltas de combustível.', 'error');
             }
           };
 
@@ -2029,14 +2105,10 @@
             }
           };
 
-          // ====== LÓGICA DO MODAL DE PAGAMENTO DO VT (PARCIAL E INTEGRAL) ======
+          // ====== LÓGICA DE PAGAMENTO DO VT ======
           const openVtPayModal = (emp) => {
              setVtEmployeeToPay(emp);
-             setVtPayForm([{ 
-               method: 'Site SpTrans', 
-               date: new Date().toLocaleDateString('pt-BR'), 
-               amount: (emp._remainingAmount || 0).toFixed(2) 
-             }]);
+             setVtPayForm([{ method: 'Site SpTrans', date: new Date().toLocaleDateString('pt-BR'), amount: (emp._remainingAmount || 0).toFixed(2) }]);
              setVtPayModalOpen(true);
           };
 
@@ -2046,79 +2118,113 @@
              setVtPayForm(newForm);
           };
 
-          const addVtPayMethod = () => {
-             setVtPayForm([...vtPayForm, { method: 'Site SpTrans', date: new Date().toLocaleDateString('pt-BR'), amount: '' }]);
-          };
-
-          const removeVtPayMethod = (index) => {
-             setVtPayForm(vtPayForm.filter((_, i) => i !== index));
-          };
+          const addVtPayMethod = () => setVtPayForm([...vtPayForm, { method: 'Site SpTrans', date: new Date().toLocaleDateString('pt-BR'), amount: '' }]);
+          const removeVtPayMethod = (index) => setVtPayForm(vtPayForm.filter((_, i) => i !== index));
 
           const confirmVtPayment = async (e) => {
              e.preventDefault();
              if (!canWrite || !db || !vtEmployeeToPay) return;
 
-             // Verifica se preencheu tudo
              const hasEmpty = vtPayForm.some(p => !p.date || !p.amount || Number(p.amount) <= 0);
-             if (hasEmpty) {
-                showToast("Preencha a data e o valor corretamente em todos os métodos.", "error");
-                return;
-             }
+             if (hasEmpty) return showToast("Preencha a data e o valor corretamente em todos os métodos.", "error");
 
-             // Junta os pagamentos novos com os que já existiam
              const currentDetails = vtEmployeeToPay._paymentDetails?.details || [];
              const newDetails = [...currentDetails, ...vtPayForm];
              const newPaidTotal = newDetails.reduce((a,b) => a + Number(b.amount || 0), 0);
              
-             // Define o status (Pago se o total atingir ou passar o valor do benefício)
              const isFullyPaid = newPaidTotal >= (vtEmployeeToPay._benefitValue - 0.01);
              const newStatus = isFullyPaid ? 'Pago' : 'Parcial';
 
-             // Congela os valores no primeiro pagamento para proteger o histórico
-             const lockedTotal = vtEmployeeToPay._paymentDetails?.lockedTotal !== undefined 
-                ? vtEmployeeToPay._paymentDetails.lockedTotal 
-                : vtEmployeeToPay._benefitValue;
-             const lockedDailyTotal = vtEmployeeToPay._paymentDetails?.lockedDailyTotal !== undefined 
-                ? vtEmployeeToPay._paymentDetails.lockedDailyTotal 
-                : vtEmployeeToPay._dailyTotal;
-             const lockedBusinessDays = vtEmployeeToPay._paymentDetails?.lockedBusinessDays !== undefined 
-                ? vtEmployeeToPay._paymentDetails.lockedBusinessDays 
-                : vtEmployeeToPay._empBusinessDays;
-             const lockedCardDetails = vtEmployeeToPay._paymentDetails?.lockedCardDetails !== undefined 
-                ? vtEmployeeToPay._paymentDetails.lockedCardDetails 
-                : vtEmployeeToPay._cardDetails;
-             const lockedParsedCards = vtEmployeeToPay._paymentDetails?.lockedParsedCards !== undefined 
-                ? vtEmployeeToPay._paymentDetails.lockedParsedCards 
-                : vtEmployeeToPay._parsedCards;
+             const lockedTotal = vtEmployeeToPay._paymentDetails?.lockedTotal !== undefined ? vtEmployeeToPay._paymentDetails.lockedTotal : vtEmployeeToPay._benefitValue;
+             const lockedDailyTotal = vtEmployeeToPay._paymentDetails?.lockedDailyTotal !== undefined ? vtEmployeeToPay._paymentDetails.lockedDailyTotal : vtEmployeeToPay._dailyTotal;
+             const lockedBusinessDays = vtEmployeeToPay._paymentDetails?.lockedBusinessDays !== undefined ? vtEmployeeToPay._paymentDetails.lockedBusinessDays : vtEmployeeToPay._empBusinessDays;
+             const lockedCardDetails = vtEmployeeToPay._paymentDetails?.lockedCardDetails !== undefined ? vtEmployeeToPay._paymentDetails.lockedCardDetails : vtEmployeeToPay._cardDetails;
+             const lockedParsedCards = vtEmployeeToPay._paymentDetails?.lockedParsedCards !== undefined ? vtEmployeeToPay._paymentDetails.lockedParsedCards : vtEmployeeToPay._parsedCards;
 
              try {
-               const docRef = doc(db, `${basePath}/employees/${vtEmployeeToPay.id}`);
-               await setDoc(docRef, {
+               await setDoc(doc(db, `${basePath}/employees/${vtEmployeeToPay.id}`), {
                   transportPayments: {
                      [monthKey]: {
-                        status: newStatus,
-                        details: newDetails,
-                        lastPaidAt: new Date().toISOString(),
-                        lastPaidBy: appUser.name,
-                        lockedTotal,
-                        lockedDailyTotal,
-                        lockedBusinessDays,
-                        lockedCardDetails,
-                        lockedParsedCards
+                        status: newStatus, details: newDetails, lastPaidAt: new Date().toISOString(), lastPaidBy: appUser.name,
+                        lockedTotal, lockedDailyTotal, lockedBusinessDays, lockedCardDetails, lockedParsedCards
                      }
                   }
                }, { merge: true });
-
                logAction('Pagamento', 'Benefícios', `Registou pagamento ${newStatus === 'Pago' ? 'Integral' : 'Parcial'} de VT para ${vtEmployeeToPay.name} (${filterMonth}/${filterYear})`);
-               showToast(newStatus === 'Pago' ? 'Pagamento de Vale Transporte concluído com sucesso!' : 'Pagamento parcial registado com sucesso. Valor restante continua pendente.');
+               showToast(newStatus === 'Pago' ? 'Pagamento de Vale Transporte concluído com sucesso!' : 'Pagamento parcial registado com sucesso.');
                setVtPayModalOpen(false);
              } catch(err) {
-               console.error("Erro ao registar pagamento VT", err);
                showToast('Erro ao registar o pagamento.', 'error');
              }
           };
-          // ======================================================================
 
+          // ====== LÓGICA DE PAGAMENTO DE COMBUSTÍVEL (INDIVIDUAL E MASSA) ======
+          const openFuelPayModal = (emp) => {
+             setFuelEmployeeToPay(emp);
+             setFuelPayDate(new Date().toLocaleDateString('pt-BR'));
+             setFuelPayModalOpen(true);
+          };
+
+          const confirmFuelPayment = async (e) => {
+             e.preventDefault();
+             if (!canWrite || !db || !fuelEmployeeToPay) return;
+
+             const lockedTotal = fuelEmployeeToPay._benefitValue;
+             const lockedDailyTotal = fuelEmployeeToPay._dailyTotal;
+             const lockedBusinessDays = fuelEmployeeToPay._empBusinessDays;
+
+             try {
+               await setDoc(doc(db, `${basePath}/employees/${fuelEmployeeToPay.id}`), {
+                  fuelPayments: {
+                     [monthKey]: {
+                        status: 'Pago', date: fuelPayDate, paidAt: new Date().toISOString(), paidBy: appUser.name,
+                        lockedTotal, lockedDailyTotal, lockedBusinessDays
+                     }
+                  }
+               }, { merge: true });
+               logAction('Pagamento', 'Benefícios', `Registou pagamento de Combustível para ${fuelEmployeeToPay.name} (${filterMonth}/${filterYear})`);
+               showToast('Pagamento de Vale Combustível concluído com sucesso!');
+               setFuelPayModalOpen(false);
+             } catch(err) {
+               showToast('Erro ao registar o pagamento de combustível.', 'error');
+             }
+          };
+
+          const openFuelBulkModal = () => {
+              const unpaidEmps = currentList.filter(e => !e._isPaid && e._benefitValue > 0);
+              setFuelBulkSelected(unpaidEmps.map(e => e.id));
+              setFuelBulkDate(new Date().toLocaleDateString('pt-BR'));
+              setFuelBulkModalOpen(true);
+          };
+
+          const toggleFuelBulkSelect = (id) => setFuelBulkSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+          const confirmFuelBulkPayment = async (e) => {
+              e.preventDefault();
+              if (!canWrite || !db || fuelBulkSelected.length === 0) return;
+
+              try {
+                  const promises = fuelBulkSelected.map(empId => {
+                      const emp = currentList.find(x => x.id === empId);
+                      return setDoc(doc(db, `${basePath}/employees/${empId}`), {
+                          fuelPayments: {
+                              [monthKey]: {
+                                  status: 'Pago', date: fuelBulkDate, paidAt: new Date().toISOString(), paidBy: appUser.name,
+                                  lockedTotal: emp._benefitValue, lockedDailyTotal: emp._dailyTotal, lockedBusinessDays: emp._empBusinessDays
+                              }
+                          }
+                      }, { merge: true });
+                  });
+                  await Promise.all(promises);
+                  logAction('Pagamento', 'Benefícios', `Registou pagamento em massa de Combustível para ${fuelBulkSelected.length} colaborador(es) (${filterMonth}/${filterYear})`);
+                  showToast('Pagamentos em massa de combustível registrados com sucesso!');
+                  setFuelBulkModalOpen(false);
+              } catch(err) {
+                  showToast('Erro ao processar pagamentos em massa.', 'error');
+              }
+          };
+
+          // ====== EXPORTAÇÃO EXCEL ======
           const handleExportCSV = () => {
             let headers = [];
             let rows = [];
@@ -2131,11 +2237,19 @@
                 `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`,
                 `"${e._isPaid ? 'Pago' : (e._isPartial ? 'Parcial' : 'Pendente')}"`
               ]);
-            } else {
-              headers = ['Nome', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Detalhes do Beneficio', 'Valor'];
+            } else if (activeSubTab === 'fuel') {
+              headers = ['Nome', 'CPF', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Valor Diario', 'Dias Uteis do Colaborador', 'Faltas Informadas', 'Valor Total Liquido', 'Status Pagamento'];
               rows = currentList.map(e => [
-                `"${e.name || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`,
-                `"${e._details || ''}"`, activeSubTab === 'fuel' ? '"-"' : `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`
+                `"${e.name || ''}"`, `"${formatCPF(e.cpf) || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`,
+                `"${formatCurrency(e._dailyTotal).replace('R$', '').trim()}"`,
+                `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`,
+                `"${e._isPaid ? 'Pago' : 'Pendente'}"`
+              ]);
+            } else {
+              headers = ['Nome', 'CPF', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Detalhes do Beneficio', 'Valor'];
+              rows = currentList.map(e => [
+                `"${e.name || ''}"`, `"${formatCPF(e.cpf) || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`,
+                `"${e._details || ''}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`
               ]);
             }
             
@@ -2160,23 +2274,20 @@
                     {activeSubTab === 'transport' ? 'Vale Transporte' : activeSubTab === 'health' ? 'Convênio Médico' : 'Vale Combustível'}
                   </h2>
                   <p className="text-slate-500 mt-1">
-                    {activeSubTab === 'transport' 
+                    {activeSubTab === 'transport' || activeSubTab === 'fuel'
                       ? `Dias úteis calculados individualmente c/ base na escala e feriados.` 
                       : `Acompanhe e exporte os benefícios do mês selecionado.`}
                   </p>
                 </div>
                 
                 <div className="flex flex-col sm:flex-row items-end gap-3 w-full xl:w-auto">
-                  <Select 
-                    label="Mês Referência" theme={theme} className="w-full sm:w-40 text-left"
-                    value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-                    options={monthOptions} 
-                  />
-                  <Select 
-                    label="Ano Referência" theme={theme} className="w-full sm:w-32 text-left"
-                    value={filterYear} onChange={e => setFilterYear(e.target.value)}
-                    options={yearOptions} 
-                  />
+                  <Select label="Mês Referência" theme={theme} className="w-full sm:w-40 text-left" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} options={monthOptions} />
+                  <Select label="Ano Referência" theme={theme} className="w-full sm:w-32 text-left" value={filterYear} onChange={e => setFilterYear(e.target.value)} options={yearOptions} />
+                  
+                  {canWrite && activeSubTab === 'fuel' && (
+                    <Button theme={theme} variant="secondary" icon={CheckSquare} onClick={openFuelBulkModal} className="w-full sm:w-auto">Pagar em Massa</Button>
+                  )}
+                  
                   <Button theme={theme} icon={Download} onClick={handleExportCSV} className="w-full sm:w-auto">Exportar Excel</Button>
                 </div>
               </div>
@@ -2197,22 +2308,20 @@
                   <p className="text-sm font-medium text-slate-500 mt-1">na listagem atual</p>
                 </Card>
 
-                {activeSubTab !== 'fuel' && (
-                  <Card className={`p-6 flex flex-col justify-center gap-2 border-l-4 border-emerald-500 transition-transform hover:-translate-y-1`}>
-                    <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400 mb-2">
-                      <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl"><DollarSign size={24} /></div>
-                      <span className="font-bold text-sm uppercase tracking-wider">Custo Total Liquido</span>
-                    </div>
-                    <h3 className="text-4xl font-black text-slate-800 dark:text-white">{formatCurrency(totalValue)}</h3>
-                    <p className="text-sm font-medium text-slate-500 mt-1">
-                      {activeSubTab === 'transport' ? `Soma das diárias em ${filterMonth}/${filterYear} (descontando faltas)` : 'Custo mensal do convênio + dependentes'}
-                    </p>
-                  </Card>
-                )}
+                <Card className={`p-6 flex flex-col justify-center gap-2 border-l-4 border-emerald-500 transition-transform hover:-translate-y-1`}>
+                  <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400 mb-2">
+                    <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl"><DollarSign size={24} /></div>
+                    <span className="font-bold text-sm uppercase tracking-wider">Custo Total Liquido</span>
+                  </div>
+                  <h3 className="text-4xl font-black text-slate-800 dark:text-white">{formatCurrency(totalValue)}</h3>
+                  <p className="text-sm font-medium text-slate-500 mt-1">
+                    {activeSubTab === 'transport' || activeSubTab === 'fuel' ? `Soma total em ${filterMonth}/${filterYear} (descontando faltas)` : 'Custo mensal do convênio + dependentes'}
+                  </p>
+                </Card>
               </div>
 
               <Card className="p-4 md:p-6 relative z-30 mb-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Buscar Colaborador</label>
                     <div className="relative">
@@ -2226,26 +2335,11 @@
                       />
                     </div>
                   </div>
-                  <Select 
-                    label="Filtrar por Empresa" theme={theme}
-                    value={filterCompany} onChange={e => setFilterCompany(e.target.value)}
-                    options={[{value: '', label: 'Todas as Empresas'}, ...companiesList.map(c => ({value: c, label: c}))]} 
-                  />
-                  <Select 
-                    label="Filtrar por Cargo" theme={theme}
-                    value={filterRole} onChange={e => setFilterRole(e.target.value)}
-                    options={[{value: '', label: 'Todos os Cargos'}, ...roles.map(r => ({value: r, label: r}))]} 
-                  />
-                  <Select 
-                    label="Filtrar por Unidade" theme={theme}
-                    value={filterUnit} onChange={e => setFilterUnit(e.target.value)}
-                    options={[{value: '', label: 'Todas as Unidades'}, ...units.map(u => ({value: u, label: u}))]} 
-                  />
-                  <Select 
-                    label="Filtrar por Setor de Atuação" theme={theme}
-                    value={filterSector} onChange={e => setFilterSector(e.target.value)}
-                    options={[{value: '', label: 'Todos os Setores'}, ...sectors.map(s => ({value: s, label: s}))]} 
-                  />
+                  <Select label="Status do Pagto." theme={theme} value={filterStatus} onChange={e => setFilterStatus(e.target.value)} options={[{value: '', label: 'Todos os Status'}, {value: 'Pago', label: 'Pago'}, {value: 'Parcial', label: 'Parcial'}, {value: 'Pendente', label: 'Pendente'}]} />
+                  <Select label="Filtrar por Empresa" theme={theme} value={filterCompany} onChange={e => setFilterCompany(e.target.value)} options={[{value: '', label: 'Todas as Empresas'}, ...companiesList.map(c => ({value: c, label: c}))]} />
+                  <Select label="Filtrar por Cargo" theme={theme} value={filterRole} onChange={e => setFilterRole(e.target.value)} options={[{value: '', label: 'Todos os Cargos'}, ...roles.map(r => ({value: r, label: r}))]} />
+                  <Select label="Filtrar por Unidade" theme={theme} value={filterUnit} onChange={e => setFilterUnit(e.target.value)} options={[{value: '', label: 'Todas as Unidades'}, ...units.map(u => ({value: u, label: u}))]} />
+                  <Select label="Filtrar por Setor de Atuação" theme={theme} value={filterSector} onChange={e => setFilterSector(e.target.value)} options={[{value: '', label: 'Todos os Setores'}, ...sectors.map(s => ({value: s, label: s}))]} />
                 </div>
               </Card>
 
@@ -2260,7 +2354,7 @@
                           <th className="p-4 font-medium text-center">Dias Úteis<br/><span className="text-[10px] opacity-70">(Individuais)</span></th>
                           <th className="p-4 font-medium w-32 text-center">Faltas no Mês</th>
                           <th className="p-4 font-medium text-right">Valor Total</th>
-                          <th className="p-4 font-medium text-center">Controlo Pagto.</th>
+                          <th className="p-4 font-medium text-center">Controle Pagto.</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2269,11 +2363,7 @@
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
-                                {emp.isVerified === false && (
-                                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">
-                                    Pendente
-                                  </span>
-                                )}
+                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">Pendente</span>}
                               </div>
                               <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
                             </td>
@@ -2290,8 +2380,7 @@
                               <span className="font-bold text-lg text-slate-700 dark:text-slate-200">{emp._empBusinessDays}</span>
                             </td>
                             <td className="p-4">
-                               <input type="number" min="0" max={emp._empBusinessDays}
-                                      disabled={!canWrite || emp._isPaid || emp._isPartial}
+                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid || emp._isPartial}
                                       className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
                                       value={localAbsences[emp.id] !== undefined ? localAbsences[emp.id] : ''}
                                       onChange={e => {
@@ -2299,18 +2388,15 @@
                                         if (Number(val) > emp._empBusinessDays) val = emp._empBusinessDays.toString();
                                         setLocalAbsences({...localAbsences, [emp.id]: val});
                                       }}
-                                      onBlur={() => handleAbsenceBlur(emp.id, emp.name)}
-                                      placeholder="0"
-                                      title={(emp._isPaid || emp._isPartial) ? "Faltas bloqueadas pois já existe um pagamento registado neste mês." : "Dias que não precisará de VT neste mês"}
+                                      onBlur={() => handleAbsenceBlur(emp.id, emp.name)} placeholder="0"
+                                      title={(emp._isPaid || emp._isPartial) ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
                                />
                             </td>
                             <td className="p-4 text-right">
                               {emp._parsedCards && emp._parsedCards.length > 0 ? (
                                 <div className="flex flex-col items-end gap-1">
                                   {emp._parsedCards.map((c, i) => (
-                                    <div key={i} className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                                      {c.name}: <strong className="text-emerald-600 dark:text-emerald-400">{formatCurrency(c.total)}</strong>
-                                    </div>
+                                    <div key={i} className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{c.name}: <strong className="text-emerald-600 dark:text-emerald-400">{formatCurrency(c.total)}</strong></div>
                                   ))}
                                   {emp._parsedCards.length > 1 && (
                                     <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 min-w-[100px] text-right flex justify-end">
@@ -2319,36 +2405,21 @@
                                   )}
                                 </div>
                               ) : (
-                                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
-                                  {formatCurrency(emp._benefitValue)}
-                                </span>
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">{formatCurrency(emp._benefitValue)}</span>
                               )}
                             </td>
                             <td className="p-4 text-center">
                                <div className="flex justify-center items-center gap-2">
-                                 {emp.isVerified === false && canWrite && (
-                                    <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência de Faltas">
-                                      <ShieldCheck size={18} />
-                                    </button>
-                                 )}
-                                 
+                                 {emp.isVerified === false && canWrite && <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
                                  {emp._isPaid ? (
-                                    <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title="Pagamento deste mês já efetuado na totalidade">
-                                      <CheckCircle size={14} /> Pago
-                                    </span>
+                                    <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title="Pagamento deste mês já efetuado na totalidade"><CheckCircle size={14} /> Pago</span>
                                  ) : (
                                     <>
-                                      {emp._isPartial && (
-                                         <span className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold flex items-center gap-1 border border-blue-200 dark:border-blue-800/50 cursor-default" title={`Falta pagar: ${formatCurrency(emp._remainingAmount)}`}>
-                                           Parcial
-                                         </span>
-                                      )}
+                                      {emp._isPartial && <span className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold flex items-center gap-1 border border-blue-200 dark:border-blue-800/50 cursor-default" title={`Falta pagar: ${formatCurrency(emp._remainingAmount)}`}>Parcial</span>}
                                       {canWrite && (
-                                        <button 
-                                          onClick={() => openVtPayModal(emp)}
-                                          disabled={emp.isVerified === false || emp._benefitValue <= 0}
+                                        <button onClick={() => openVtPayModal(emp)} disabled={emp.isVerified === false || emp._benefitValue <= 0}
                                           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.isVerified === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
-                                          title={emp.isVerified === false ? "Aguardando conferência de faltas" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento do VT"}
+                                          title={emp.isVerified === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
                                         >
                                           <DollarSign size={14} /> {emp._isPartial ? 'Restante' : 'Pagar'}
                                         </button>
@@ -2359,9 +2430,85 @@
                             </td>
                           </tr>
                         ))}
-                        {sortedList.length === 0 && (
-                          <tr><td colSpan="6" className="p-8 text-center text-slate-500 italic">Nenhum colaborador com Vale Transporte ativo.</td></tr>
-                        )}
+                        {sortedList.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-500 italic">Nenhum colaborador com Vale Transporte ativo.</td></tr>}
+                      </tbody>
+                    </table>
+                  ) : activeSubTab === 'fuel' ? (
+                    <table className="w-full text-left border-collapse min-w-[1100px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                          <th className="p-4 font-medium">Colaborador</th>
+                          <th className="p-4 font-medium">CPF</th>
+                          <th className="p-4 font-medium">Escala e Valor Diário</th>
+                          <th className="p-4 font-medium text-center">Dias Úteis<br/><span className="text-[10px] opacity-70">(Individuais)</span></th>
+                          <th className="p-4 font-medium w-32 text-center">Faltas no Mês</th>
+                          <th className="p-4 font-medium text-right">Valor Total</th>
+                          <th className="p-4 font-medium text-center">Controle Pagto.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayedList.map(emp => (
+                          <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="p-4">
+                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                                {emp.name || 'Desconhecido'}
+                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
+                              </div>
+                              <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
+                            </td>
+                            <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
+                            <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
+                               <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                               </div>
+                               <div className="font-bold text-slate-700 dark:text-slate-300 mt-1.5 text-xs">Valor Diário: {formatCurrency(emp._dailyTotal)}</div>
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className="font-bold text-lg text-slate-700 dark:text-slate-200">{emp._empBusinessDays}</span>
+                            </td>
+                            <td className="p-4">
+                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid}
+                                      className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
+                                      value={localFuelAbsences[emp.id] !== undefined ? localFuelAbsences[emp.id] : ''}
+                                      onChange={e => {
+                                        let val = e.target.value.replace(/\D/g, '');
+                                        if (Number(val) > emp._empBusinessDays) val = emp._empBusinessDays.toString();
+                                        setLocalFuelAbsences({...localFuelAbsences, [emp.id]: val});
+                                      }}
+                                      onBlur={() => handleFuelAbsenceBlur(emp.id, emp.name)} placeholder="0"
+                                      title={emp._isPaid ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
+                               />
+                            </td>
+                            <td className="p-4 text-right">
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
+                                  {formatCurrency(emp._benefitValue)}
+                                </span>
+                            </td>
+                            <td className="p-4 text-center">
+                               <div className="flex justify-center items-center gap-2">
+                                 {emp.isVerified === false && canWrite && <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
+                                 
+                                 {emp._isPaid ? (
+                                    <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title={`Pago em: ${emp._paymentDetails?.date}`}>
+                                      <CheckCircle size={14} /> Pago
+                                    </span>
+                                 ) : (
+                                    canWrite && (
+                                      <button 
+                                        onClick={() => openFuelPayModal(emp)}
+                                        disabled={emp.isVerified === false || emp._benefitValue <= 0}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.isVerified === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
+                                        title={emp.isVerified === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
+                                      >
+                                        <DollarSign size={14} /> Pagar
+                                      </button>
+                                    )
+                                 )}
+                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {sortedList.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">Nenhum colaborador com Vale Combustível ativo.</td></tr>}
                       </tbody>
                     </table>
                   ) : (
@@ -2369,10 +2516,11 @@
                       <thead>
                         <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
                           <th className="p-4 font-medium">Colaborador</th>
+                          <th className="p-4 font-medium">CPF</th>
                           <th className="p-4 font-medium">Cargo</th>
                           <th className="p-4 font-medium">Local de Trabalho</th>
                           <th className="p-4 font-medium">Detalhes do Benefício</th>
-                          {activeSubTab !== 'fuel' && <th className="p-4 font-medium text-right">Valor Registrado</th>}
+                          <th className="p-4 font-medium text-right">Valor Registrado</th>
                           <th className="p-4 font-medium text-center">Ações</th>
                         </tr>
                       </thead>
@@ -2382,39 +2530,26 @@
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
-                                {emp.isVerified === false && (
-                                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">
-                                    Pendente
-                                  </span>
-                                )}
+                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase">Pendente</span>}
                               </div>
                             </td>
+                            <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{emp.role || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{emp.unit || '-'} • {emp.workSector || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{emp._details}</td>
-                            {activeSubTab !== 'fuel' && (
-                              <td className="p-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                            <td className="p-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
                                 {formatCurrency(emp._benefitValue)}
-                              </td>
-                            )}
+                            </td>
                             <td className="p-4 text-center">
                                <div className="flex justify-center">
                                  {emp.isVerified === false && canWrite && (
-                                    <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência">
-                                      <ShieldCheck size={18} />
-                                    </button>
+                                    <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>
                                  )}
                                </div>
                             </td>
                           </tr>
                         ))}
-                        {sortedList.length === 0 && (
-                          <tr>
-                            <td colSpan={activeSubTab === 'fuel' ? 5 : 6} className="p-8 text-center text-slate-500 italic">
-                              Nenhum colaborador encontrado com este benefício ativo.
-                            </td>
-                          </tr>
-                        )}
+                        {sortedList.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">Nenhum colaborador encontrado com este benefício ativo.</td></tr>}
                       </tbody>
                     </table>
                   )}
@@ -2423,12 +2558,7 @@
                 {/* Botão de Paginação (Carregar Mais) */}
                 {sortedList.length > visibleCount && (
                   <div className="p-4 flex justify-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl mt-2">
-                    <Button 
-                      variant="secondary" 
-                      theme={theme} 
-                      onClick={() => setVisibleCount(prev => prev + 50)}
-                      icon={RefreshCw}
-                    >
+                    <Button variant="secondary" theme={theme} onClick={() => setVisibleCount(prev => prev + 50)} icon={RefreshCw}>
                       Carregar mais dados
                     </Button>
                   </div>
@@ -2438,13 +2568,10 @@
               {/* Modal de Pagamento do Vale Transporte */}
               <Modal isOpen={vtPayModalOpen} onClose={() => setVtPayModalOpen(false)} title={`Pagar Vale Transporte - ${vtEmployeeToPay?.name}`}>
                 <form onSubmit={confirmVtPayment} className="space-y-6">
-                  
                   <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col items-center text-center">
                     <span className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Valor Restante a Pagar ({filterMonth}/{filterYear})</span>
                     <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 my-1">{formatCurrency(vtEmployeeToPay?._remainingAmount)}</span>
-                    <span className="text-sm text-emerald-700 dark:text-emerald-500">
-                      Total Devido: {formatCurrency(vtEmployeeToPay?._benefitValue)}
-                    </span>
+                    <span className="text-sm text-emerald-700 dark:text-emerald-500">Total Devido: {formatCurrency(vtEmployeeToPay?._benefitValue)}</span>
                   </div>
 
                   {vtEmployeeToPay?._paymentDetails?.details && vtEmployeeToPay._paymentDetails.details.length > 0 && (
@@ -2452,11 +2579,7 @@
                       <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Pagamentos Já Realizados</h3>
                       {vtEmployeeToPay._paymentDetails.details.map((p, idx) => (
                         <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 text-sm">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle size={16} className="text-emerald-500" />
-                            <span className="font-medium text-slate-700 dark:text-slate-300">{p.method}</span>
-                            <span className="text-slate-500">({p.date})</span>
-                          </div>
+                          <div className="flex items-center gap-2"><CheckCircle size={16} className="text-emerald-500" /><span className="font-medium text-slate-700 dark:text-slate-300">{p.method}</span><span className="text-slate-500">({p.date})</span></div>
                           <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(p.amount)}</span>
                         </div>
                       ))}
@@ -2469,47 +2592,30 @@
                       <div key={index} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4 relative">
                         <div className="flex justify-between items-center mb-1">
                           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lançamento {index + 1}</h4>
-                          {vtPayForm.length > 1 && (
-                            <button type="button" onClick={() => removeVtPayMethod(index)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 rounded-lg transition-colors">
-                              <X size={16} />
-                            </button>
-                          )}
+                          {vtPayForm.length > 1 && <button type="button" onClick={() => removeVtPayMethod(index)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 rounded-lg transition-colors"><X size={16} /></button>}
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Select 
-                            label="Método" theme={theme} required value={item.method} 
-                            onChange={e => handleVtPayChange(index, 'method', e.target.value)}
-                            options={[ {value: 'Site SpTrans', label: 'Site SpTrans'}, {value: 'Em Conta', label: 'Em Conta'}, {value: 'Recarga na Maquininha', label: 'Recarga na Maquininha'} ]} 
-                          />
-                          <Input 
-                            label="Data do Pagto." type="text" placeholder="DD/MM/AAAA" theme={theme} required 
-                            value={item.date} 
+                          <Select label="Método" theme={theme} required value={item.method} onChange={e => handleVtPayChange(index, 'method', e.target.value)} options={[ {value: 'Site SpTrans', label: 'Site SpTrans'}, {value: 'Em Conta', label: 'Em Conta'}, {value: 'Recarga na Maquininha', label: 'Recarga na Maquininha'} ]} />
+                          <Input label="Data do Pagto." type="text" placeholder="DD/MM/AAAA" theme={theme} required value={item.date} 
                             onChange={e => {
-                              let val = e.target.value.replace(/\D/g, ''); 
-                              if (val.length > 8) val = val.slice(0, 8);
+                              let val = e.target.value.replace(/\D/g, ''); if (val.length > 8) val = val.slice(0, 8);
                               let formattedDate = val;
                               if (val.length > 4) formattedDate = `${val.slice(0, 2)}/${val.slice(2, 4)}/${val.slice(4)}`;
                               else if (val.length > 2) formattedDate = `${val.slice(0, 2)}/${val.slice(2)}`;
                               handleVtPayChange(index, 'date', formattedDate);
                             }} 
                           />
-                          <Input 
-                            label="Valor Divisão (R$)" type="text" theme={theme} required 
-                            value={displayCurrencyMask(item.amount)} 
+                          <Input label="Valor Divisão (R$)" type="text" theme={theme} required value={displayCurrencyMask(item.amount)} 
                             onChange={e => {
-                              let val = e.target.value.replace(/\D/g, '');
-                              if (!val) return handleVtPayChange(index, 'amount', '');
+                              let val = e.target.value.replace(/\D/g, ''); if (!val) return handleVtPayChange(index, 'amount', '');
                               handleVtPayChange(index, 'amount', (Number(val) / 100).toFixed(2));
                             }} 
                           />
                         </div>
                       </div>
                     ))}
-                    
-                    <Button type="button" variant="ghost" theme={theme} icon={Plus} onClick={addVtPayMethod} className="w-full border border-dashed border-slate-300 dark:border-slate-600 mt-2">
-                      Adicionar outra forma de pagamento
-                    </Button>
+                    <Button type="button" variant="ghost" theme={theme} icon={Plus} onClick={addVtPayMethod} className="w-full border border-dashed border-slate-300 dark:border-slate-600 mt-2">Adicionar outra forma de pagamento</Button>
                   </div>
 
                   {vtPayForm.length > 1 && (
@@ -2525,6 +2631,80 @@
                     <Button variant="ghost" theme={theme} type="button" onClick={() => setVtPayModalOpen(false)}>Cancelar</Button>
                     <Button variant="primary" theme={theme} type="submit" icon={CheckCircle}>Confirmar Pagamento</Button>
                   </div>
+                </form>
+              </Modal>
+
+              {/* Modal de Pagamento Individual - Vale Combustível */}
+              <Modal isOpen={fuelPayModalOpen} onClose={() => setFuelPayModalOpen(false)} title={`Pagar Vale Combustível - ${fuelEmployeeToPay?.name}`}>
+                <form onSubmit={confirmFuelPayment} className="space-y-6">
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col items-center text-center">
+                        <span className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Valor a Pagar ({filterMonth}/{filterYear})</span>
+                        <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 my-1">{formatCurrency(fuelEmployeeToPay?._benefitValue)}</span>
+                    </div>
+                    <div className="space-y-4">
+                      <Input 
+                          label="Data do Pagamento" type="text" placeholder="DD/MM/AAAA" theme={theme} required 
+                          value={fuelPayDate} 
+                          onChange={e => {
+                              let val = e.target.value.replace(/\D/g, ''); 
+                              if (val.length > 8) val = val.slice(0, 8);
+                              let formattedDate = val;
+                              if (val.length > 4) formattedDate = `${val.slice(0, 2)}/${val.slice(2, 4)}/${val.slice(4)}`;
+                              else if (val.length > 2) formattedDate = `${val.slice(0, 2)}/${val.slice(2)}`;
+                              setFuelPayDate(formattedDate);
+                          }} 
+                      />
+                    </div>
+                    <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                        <Button variant="ghost" theme={theme} type="button" onClick={() => setFuelPayModalOpen(false)}>Cancelar</Button>
+                        <Button variant="primary" theme={theme} type="submit" icon={CheckCircle}>Confirmar Pagamento</Button>
+                    </div>
+                </form>
+              </Modal>
+
+              {/* Modal de Pagamento em Massa - Vale Combustível */}
+              <Modal isOpen={fuelBulkModalOpen} onClose={() => setFuelBulkModalOpen(false)} title={`Pagamento em Massa - Vale Combustível`}>
+                <form onSubmit={confirmFuelBulkPayment} className="space-y-4">
+                    <Input 
+                        label="Data do Pagamento" type="text" placeholder="DD/MM/AAAA" theme={theme} required 
+                        value={fuelBulkDate} 
+                        onChange={e => {
+                            let val = e.target.value.replace(/\D/g, ''); 
+                            if (val.length > 8) val = val.slice(0, 8);
+                            let formattedDate = val;
+                            if (val.length > 4) formattedDate = `${val.slice(0, 2)}/${val.slice(2, 4)}/${val.slice(4)}`;
+                            else if (val.length > 2) formattedDate = `${val.slice(0, 2)}/${val.slice(2)}`;
+                            setFuelBulkDate(formattedDate);
+                        }} 
+                    />
+                    
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 flex flex-col mt-4">
+                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                            <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Colaboradores Selecionados ({fuelBulkSelected.length})</span>
+                            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                                Total: {formatCurrency(currentList.filter(e => fuelBulkSelected.includes(e.id)).reduce((acc, curr) => acc + curr._benefitValue, 0))}
+                            </span>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(emp => (
+                                <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => toggleFuelBulkSelect(emp.id)}>
+                                    <div className="flex items-center gap-3">
+                                        {fuelBulkSelected.includes(emp.id) ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} className="text-slate-400" />}
+                                        <span className="text-sm font-medium">{emp.name}</span>
+                                    </div>
+                                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(emp._benefitValue)}</span>
+                                </div>
+                            ))}
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).length === 0 && (
+                                <p className="text-sm text-center py-4 text-slate-500">Nenhum colaborador com valor pendente para este mês.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                        <Button variant="ghost" theme={theme} type="button" onClick={() => setFuelBulkModalOpen(false)}>Cancelar</Button>
+                        <Button variant="primary" theme={theme} type="submit" icon={CheckCircle} disabled={fuelBulkSelected.length === 0}>Pagar ({fuelBulkSelected.length})</Button>
+                    </div>
                 </form>
               </Modal>
 
@@ -3232,7 +3412,7 @@
             saturdayShift: 'Não trabalha', saturdayShiftTeam: '',
             cep: '', street: '', number: '', complement: '', neighborhood: '', state: '',
             bankName: '', agency: '', account: '', pixType: 'CPF', pixKey: '',
-            healthInsurance: 'Não', healthInsuranceValue: '', hasDependents: 'Não', dependentsCount: '', dependentsValue: '', fuelAllowance: 'Não',
+            healthInsurance: 'Não', healthInsuranceValue: '', hasDependents: 'Não', dependentsCount: '', dependentsValue: '', fuelAllowance: 'Não', fuelAllowanceValue: '',
             transportVoucher: 'Não', transportCards: [{ name: '', valuePerDay: '' }],
             hasChildren: 'Não', children: [{ name: '', birthDate: '' }],
             hasLoans: 'Não', loans: [{ loanMonth: '', deadlineMonth: '', totalAmount: '', installmentsCount: '', installmentValue: '' }],
@@ -3773,11 +3953,22 @@
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Benefícios</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Select 
-                            label="Vale Combustível" theme={theme} value={formData.fuelAllowance} 
-                            onChange={e => setFormData({...formData, fuelAllowance: e.target.value})} 
-                            options={[{value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
-                          />
+                          <div className="flex flex-col gap-4">
+                            <Select 
+                              label="Vale Combustível" theme={theme} value={formData.fuelAllowance} 
+                              onChange={e => setFormData({...formData, fuelAllowance: e.target.value})} 
+                              options={[{value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
+                            />
+                            {formData.fuelAllowance === 'Sim' && (
+                              <div className="animate-in fade-in slide-in-from-top-2">
+                                <Input 
+                                  label="Valor Diário do Combustível (R$)" type="text" theme={theme} required 
+                                  value={displayCurrencyMask(formData.fuelAllowanceValue)} 
+                                  onChange={e => setFormData({...formData, fuelAllowanceValue: formatCurrencyInput(e.target.value)})} 
+                                />
+                              </div>
+                            )}
+                          </div>
                           <Select 
                             label="Opta por Convênio?" theme={theme} value={formData.healthInsurance} 
                             onChange={e => setFormData({...formData, healthInsurance: e.target.value})} 
