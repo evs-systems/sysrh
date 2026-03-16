@@ -1908,13 +1908,23 @@
 
               let dailyTotal = (e.transportCards || []).reduce((acc, c) => acc + (Number(c.valuePerDay) || 0), 0);
               const empAbsences = Number(localAbsences[e.id]) || 0;
-              let cardDetails = (e.transportCards || []).map((c, i) => `${c.name || `Cartão ${i+1}`}: ${formatCurrency(c.valuePerDay)}`).join(' | ');
+              const payableDays = Math.max(0, empBusinessDays - empAbsences);
+              
+              let parsedCards = (e.transportCards || []).map((c, i) => {
+                  const cardTotal = (Number(c.valuePerDay) || 0) * payableDays;
+                  return {
+                      name: c.name || `Cartão ${i+1}`,
+                      valuePerDay: Number(c.valuePerDay) || 0,
+                      total: cardTotal
+                  };
+              });
+
+              let cardDetails = parsedCards.map(c => `${c.name}: ${formatCurrency(c.valuePerDay)}/dia`).join(' | ');
               
               const monthPaymentInfo = e.transportPayments?.[monthKey];
               const paidAmount = (monthPaymentInfo?.details || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
               
               let calcTotal = 0;
-              const payableDays = Math.max(0, empBusinessDays - empAbsences);
 
               // Congelamento de Valores Históricos
               if (monthPaymentInfo && monthPaymentInfo.lockedTotal !== undefined) {
@@ -1922,6 +1932,7 @@
                  dailyTotal = monthPaymentInfo.lockedDailyTotal;
                  cardDetails = monthPaymentInfo.lockedCardDetails || cardDetails;
                  empBusinessDays = monthPaymentInfo.lockedBusinessDays || empBusinessDays;
+                 parsedCards = monthPaymentInfo.lockedParsedCards || parsedCards;
               } else if (monthPaymentInfo && monthPaymentInfo.status === 'Pago') {
                  // Fallback para pagamentos antigos (legado) que não tinham o congelamento
                  calcTotal = paidAmount > 0 ? paidAmount : (dailyTotal * payableDays);
@@ -1952,6 +1963,7 @@
                 _benefitValue: calcTotal, 
                 _dailyTotal: dailyTotal, 
                 _cardDetails: cardDetails, 
+                _parsedCards: parsedCards,
                 _empAbsences: empAbsences, 
                 _empBusinessDays: empBusinessDays,
                 _isPaid: isPaid,
@@ -2072,6 +2084,9 @@
              const lockedCardDetails = vtEmployeeToPay._paymentDetails?.lockedCardDetails !== undefined 
                 ? vtEmployeeToPay._paymentDetails.lockedCardDetails 
                 : vtEmployeeToPay._cardDetails;
+             const lockedParsedCards = vtEmployeeToPay._paymentDetails?.lockedParsedCards !== undefined 
+                ? vtEmployeeToPay._paymentDetails.lockedParsedCards 
+                : vtEmployeeToPay._parsedCards;
 
              try {
                const docRef = doc(db, `${basePath}/employees/${vtEmployeeToPay.id}`);
@@ -2085,7 +2100,8 @@
                         lockedTotal,
                         lockedDailyTotal,
                         lockedBusinessDays,
-                        lockedCardDetails
+                        lockedCardDetails,
+                        lockedParsedCards
                      }
                   }
                }, { merge: true });
@@ -2280,8 +2296,25 @@
                                       title={(emp._isPaid || emp._isPartial) ? "Faltas bloqueadas pois já existe um pagamento registado neste mês." : "Dias que não precisará de VT neste mês"}
                                />
                             </td>
-                            <td className="p-4 text-right font-bold text-emerald-600 dark:text-emerald-400 text-lg">
-                              {formatCurrency(emp._benefitValue)}
+                            <td className="p-4 text-right">
+                              {emp._parsedCards && emp._parsedCards.length > 0 ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  {emp._parsedCards.map((c, i) => (
+                                    <div key={i} className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                      {c.name}: <strong className="text-emerald-600 dark:text-emerald-400">{formatCurrency(c.total)}</strong>
+                                    </div>
+                                  ))}
+                                  {emp._parsedCards.length > 1 && (
+                                    <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 min-w-[100px] text-right flex justify-end">
+                                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">Soma: {formatCurrency(emp._benefitValue)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
+                                  {formatCurrency(emp._benefitValue)}
+                                </span>
+                              )}
                             </td>
                             <td className="p-4 text-center">
                                <div className="flex justify-center items-center gap-2">
