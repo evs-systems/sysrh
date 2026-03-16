@@ -1778,10 +1778,13 @@
 
         function BenefitsView({ theme, basePath, appUser, employees, showToast, logAction, db }) {
           const [activeSubTab, setActiveSubTab] = useState('transport');
+          const [searchTerm, setSearchTerm] = useState('');
           const [filterRole, setFilterRole] = useState('');
           const [filterUnit, setFilterUnit] = useState('');
           const [filterSector, setFilterSector] = useState('');
           
+          const [visibleCount, setVisibleCount] = useState(50);
+
           const canWrite = appUser?.permissions?.benefits?.write || appUser?.permissions?.employees?.write || appUser?.sector === 'Administração';
 
           // Controlo de Data para o Histórico (Filtro de Mês/Ano)
@@ -1792,6 +1795,11 @@
           const [filterMonth, setFilterMonth] = useState(currentMonthStr);
           const [filterYear, setFilterYear] = useState(currentYearStr);
           const monthKey = `${filterYear}-${filterMonth}`; // Ex: "2026-03"
+
+          // Repõe a contagem visível sempre que o utilizador muda de aba ou faz uma pesquisa
+          useEffect(() => {
+            setVisibleCount(50);
+          }, [activeSubTab, searchTerm, filterRole, filterUnit, filterSector, filterMonth, filterYear]);
 
           const monthOptions = [
             { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -1876,6 +1884,7 @@
 
           // Aplicação dos Filtros
           let filteredEmps = activeEmployees;
+          if (searchTerm) filteredEmps = filteredEmps.filter(e => (e.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
           if (filterRole) filteredEmps = filteredEmps.filter(e => e.role === filterRole);
           if (filterUnit) filteredEmps = filteredEmps.filter(e => e.unit === filterUnit);
           if (filterSector) filteredEmps = filteredEmps.filter(e => e.workSector === filterSector);
@@ -1897,18 +1906,30 @@
                   }
               }
 
-              const dailyTotal = (e.transportCards || []).reduce((acc, c) => acc + (Number(c.valuePerDay) || 0), 0);
+              let dailyTotal = (e.transportCards || []).reduce((acc, c) => acc + (Number(c.valuePerDay) || 0), 0);
               const empAbsences = Number(localAbsences[e.id]) || 0;
+              let cardDetails = (e.transportCards || []).map((c, i) => `${c.name || `Cartão ${i+1}`}: ${formatCurrency(c.valuePerDay)}`).join(' | ');
               
-              const payableDays = Math.max(0, empBusinessDays - empAbsences);
-              const calcTotal = dailyTotal * payableDays;
-              totalValue += calcTotal;
-              
-              const cardDetails = (e.transportCards || []).map((c, i) => `${c.name || `Cartão ${i+1}`}: ${formatCurrency(c.valuePerDay)}`).join(' | ');
-
-              // Lógica de Pagamentos Parciais e Integrais
               const monthPaymentInfo = e.transportPayments?.[monthKey];
               const paidAmount = (monthPaymentInfo?.details || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+              
+              let calcTotal = 0;
+              const payableDays = Math.max(0, empBusinessDays - empAbsences);
+
+              // Congelamento de Valores Históricos
+              if (monthPaymentInfo && monthPaymentInfo.lockedTotal !== undefined) {
+                 calcTotal = monthPaymentInfo.lockedTotal;
+                 dailyTotal = monthPaymentInfo.lockedDailyTotal;
+                 cardDetails = monthPaymentInfo.lockedCardDetails || cardDetails;
+                 empBusinessDays = monthPaymentInfo.lockedBusinessDays || empBusinessDays;
+              } else if (monthPaymentInfo && monthPaymentInfo.status === 'Pago') {
+                 // Fallback para pagamentos antigos (legado) que não tinham o congelamento
+                 calcTotal = paidAmount > 0 ? paidAmount : (dailyTotal * payableDays);
+              } else {
+                 calcTotal = dailyTotal * payableDays;
+              }
+
+              totalValue += calcTotal;
               
               const remainingAmount = Math.max(0, calcTotal - paidAmount);
               
@@ -2038,6 +2059,20 @@
              const isFullyPaid = newPaidTotal >= (vtEmployeeToPay._benefitValue - 0.01);
              const newStatus = isFullyPaid ? 'Pago' : 'Parcial';
 
+             // Congela os valores no primeiro pagamento para proteger o histórico
+             const lockedTotal = vtEmployeeToPay._paymentDetails?.lockedTotal !== undefined 
+                ? vtEmployeeToPay._paymentDetails.lockedTotal 
+                : vtEmployeeToPay._benefitValue;
+             const lockedDailyTotal = vtEmployeeToPay._paymentDetails?.lockedDailyTotal !== undefined 
+                ? vtEmployeeToPay._paymentDetails.lockedDailyTotal 
+                : vtEmployeeToPay._dailyTotal;
+             const lockedBusinessDays = vtEmployeeToPay._paymentDetails?.lockedBusinessDays !== undefined 
+                ? vtEmployeeToPay._paymentDetails.lockedBusinessDays 
+                : vtEmployeeToPay._empBusinessDays;
+             const lockedCardDetails = vtEmployeeToPay._paymentDetails?.lockedCardDetails !== undefined 
+                ? vtEmployeeToPay._paymentDetails.lockedCardDetails 
+                : vtEmployeeToPay._cardDetails;
+
              try {
                const docRef = doc(db, `${basePath}/employees/${vtEmployeeToPay.id}`);
                await setDoc(docRef, {
@@ -2046,7 +2081,11 @@
                         status: newStatus,
                         details: newDetails,
                         lastPaidAt: new Date().toISOString(),
-                        lastPaidBy: appUser.name
+                        lastPaidBy: appUser.name,
+                        lockedTotal,
+                        lockedDailyTotal,
+                        lockedBusinessDays,
+                        lockedCardDetails
                      }
                   }
                }, { merge: true });
@@ -2089,6 +2128,10 @@
             link.click();
             showToast('Relatório exportado para Excel com sucesso!');
           };
+
+          // Ordenação e Paginação (Carregar Mais)
+          const sortedList = currentList.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+          const displayedList = sortedList.slice(0, visibleCount);
 
           return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -2150,7 +2193,20 @@
               </div>
 
               <Card className="p-4 md:p-6 relative z-30 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Buscar Colaborador</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" size={18} />
+                      <input 
+                        type="text" 
+                        placeholder="Nome..." 
+                        className={`w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white backdrop-blur-sm`}
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </div>
                   <Select 
                     label="Filtrar por Cargo" theme={theme}
                     value={filterRole} onChange={e => setFilterRole(e.target.value)}
@@ -2184,7 +2240,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {currentList.sort((a,b) => (a.name || '').localeCompare(b.name || '')).map(emp => (
+                        {displayedList.map(emp => (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
@@ -2262,7 +2318,7 @@
                             </td>
                           </tr>
                         ))}
-                        {currentList.length === 0 && (
+                        {sortedList.length === 0 && (
                           <tr><td colSpan="6" className="p-8 text-center text-slate-500 italic">Nenhum colaborador com Vale Transporte ativo.</td></tr>
                         )}
                       </tbody>
@@ -2280,7 +2336,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {currentList.sort((a,b) => (a.name || '').localeCompare(b.name || '')).map(emp => (
+                        {displayedList.map(emp => (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
@@ -2311,7 +2367,7 @@
                             </td>
                           </tr>
                         ))}
-                        {currentList.length === 0 && (
+                        {sortedList.length === 0 && (
                           <tr>
                             <td colSpan={activeSubTab === 'fuel' ? 5 : 6} className="p-8 text-center text-slate-500 italic">
                               Nenhum colaborador encontrado com este benefício ativo.
@@ -2322,6 +2378,20 @@
                     </table>
                   )}
                 </div>
+                
+                {/* Botão de Paginação (Carregar Mais) */}
+                {sortedList.length > visibleCount && (
+                  <div className="p-4 flex justify-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl mt-2">
+                    <Button 
+                      variant="secondary" 
+                      theme={theme} 
+                      onClick={() => setVisibleCount(prev => prev + 50)}
+                      icon={RefreshCw}
+                    >
+                      Carregar mais dados
+                    </Button>
+                  </div>
+                )}
               </Card>
 
               {/* Modal de Pagamento do Vale Transporte */}
@@ -2352,7 +2422,7 @@
                     </div>
                   )}
 
-                  <div className="space-y-4 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
+                  <div className="space-y-4 overflow-visible">
                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Formas de Pagamento</h3>
                     {vtPayForm.map((item, index) => (
                       <div key={index} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4 relative">
@@ -3704,9 +3774,6 @@
                         {formData.transportVoucher === 'Sim' && (
                           <div className="space-y-3 p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 mt-2 animate-in fade-in slide-in-from-top-2">
                             <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Cartões de Transporte</h4>
-                            {formData.transportVoucher === 'Sim' && (
-                          <div className="space-y-3 p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 mt-2 animate-in fade-in slide-in-from-top-2">
-                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Cartões de Transporte</h4>
                             {(formData.transportCards || [{ name: '', valuePerDay: '' }]).map((card, index) => (
                               <div key={index} className="flex flex-col md:flex-row gap-4 items-end relative pb-4 mb-4 border-b border-slate-200/50 dark:border-slate-700/50 last:border-0 last:mb-0 last:pb-0">
                                 <Input 
@@ -3734,21 +3801,6 @@
                                 )}
                               </div>
                             ))}
-                            
-                            {(formData.transportCards || []).length > 1 && (
-                              <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50 mb-3">
-                                <span className="text-sm font-bold text-blue-800 dark:text-blue-300">Total Diário (Somado):</span>
-                                <span className="text-lg font-black text-blue-600 dark:text-blue-400">
-                                  {formatCurrency((formData.transportCards || []).reduce((acc, curr) => acc + Number(curr.valuePerDay || 0), 0))}
-                                </span>
-                              </div>
-                            )}
-
-                            <Button type="button" variant="ghost" theme={theme} icon={Plus} onClick={addTransportCard} className="w-full border border-dashed border-slate-300 dark:border-slate-600">
-                              Adicionar outro cartão
-                            </Button>
-                          </div>
-                        )}
                             
                             {(formData.transportCards || []).length > 1 && (
                               <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50 mb-3">
