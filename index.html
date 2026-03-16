@@ -1779,6 +1779,7 @@
         function BenefitsView({ theme, basePath, appUser, employees, showToast, logAction, db }) {
           const [activeSubTab, setActiveSubTab] = useState('transport');
           const [searchTerm, setSearchTerm] = useState('');
+          const [filterCompany, setFilterCompany] = useState('');
           const [filterRole, setFilterRole] = useState('');
           const [filterUnit, setFilterUnit] = useState('');
           const [filterSector, setFilterSector] = useState('');
@@ -1799,7 +1800,7 @@
           // Repõe a contagem visível sempre que o utilizador muda de aba ou faz uma pesquisa
           useEffect(() => {
             setVisibleCount(50);
-          }, [activeSubTab, searchTerm, filterRole, filterUnit, filterSector, filterMonth, filterYear]);
+          }, [activeSubTab, searchTerm, filterCompany, filterRole, filterUnit, filterSector, filterMonth, filterYear]);
 
           const monthOptions = [
             { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -1837,6 +1838,7 @@
             setOriginalAbsences(loadedAbsences);
           }, [employees, monthKey]);
 
+          const companiesList = [...new Set(activeEmployees.map(e => e.company).filter(Boolean))].sort();
           const roles = [...new Set(activeEmployees.map(e => e.role).filter(Boolean))].sort();
           const units = [...new Set(activeEmployees.map(e => e.unit).filter(Boolean))].sort();
           const sectors = [...new Set(activeEmployees.map(e => e.workSector).filter(Boolean))].sort();
@@ -1885,6 +1887,7 @@
           // Aplicação dos Filtros
           let filteredEmps = activeEmployees;
           if (searchTerm) filteredEmps = filteredEmps.filter(e => (e.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
+          if (filterCompany) filteredEmps = filteredEmps.filter(e => e.company === filterCompany);
           if (filterRole) filteredEmps = filteredEmps.filter(e => e.role === filterRole);
           if (filterUnit) filteredEmps = filteredEmps.filter(e => e.unit === filterUnit);
           if (filterSector) filteredEmps = filteredEmps.filter(e => e.workSector === filterSector);
@@ -2209,7 +2212,7 @@
               </div>
 
               <Card className="p-4 md:p-6 relative z-30 mb-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Buscar Colaborador</label>
                     <div className="relative">
@@ -2223,6 +2226,11 @@
                       />
                     </div>
                   </div>
+                  <Select 
+                    label="Filtrar por Empresa" theme={theme}
+                    value={filterCompany} onChange={e => setFilterCompany(e.target.value)}
+                    options={[{value: '', label: 'Todas as Empresas'}, ...companiesList.map(c => ({value: c, label: c}))]} 
+                  />
                   <Select 
                     label="Filtrar por Cargo" theme={theme}
                     value={filterRole} onChange={e => setFilterRole(e.target.value)}
