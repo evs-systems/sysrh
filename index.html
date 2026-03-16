@@ -1784,7 +1784,7 @@
           
           const canWrite = appUser?.permissions?.benefits?.write || appUser?.permissions?.employees?.write || appUser?.sector === 'Administração';
 
-          // Controle de Data para o Histórico (Filtro de Mês/Ano)
+          // Controlo de Data para o Histórico (Filtro de Mês/Ano)
           const today = new Date();
           const currentMonthStr = String(today.getMonth() + 1).padStart(2, '0');
           const currentYearStr = String(today.getFullYear());
@@ -1809,6 +1809,11 @@
           // Estado local para as faltas
           const [localAbsences, setLocalAbsences] = useState({});
           const [originalAbsences, setOriginalAbsences] = useState({});
+
+          // Estados para o Modal de Pagamento do VT
+          const [vtPayModalOpen, setVtPayModalOpen] = useState(false);
+          const [vtEmployeeToPay, setVtEmployeeToPay] = useState(null);
+          const [vtPayForm, setVtPayForm] = useState([{ method: 'Site SpTrans', date: '', amount: '' }]);
 
           const safeEmployees = Array.isArray(employees) ? employees : [];
           const activeEmployees = safeEmployees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
@@ -1901,7 +1906,39 @@
               
               const cardDetails = (e.transportCards || []).map((c, i) => `${c.name || `Cartão ${i+1}`}: ${formatCurrency(c.valuePerDay)}`).join(' | ');
 
-              return { ...e, _benefitValue: calcTotal, _dailyTotal: dailyTotal, _cardDetails: cardDetails, _empAbsences: empAbsences, _empBusinessDays: empBusinessDays };
+              // Lógica de Pagamentos Parciais e Integrais
+              const monthPaymentInfo = e.transportPayments?.[monthKey];
+              const paidAmount = (monthPaymentInfo?.details || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+              
+              const remainingAmount = Math.max(0, calcTotal - paidAmount);
+              
+              let isPaid = false;
+              let isPartial = false;
+
+              if (monthPaymentInfo) {
+                  // Tolera até 1 cêntimo de diferença por arredondamentos
+                  if (paidAmount >= (calcTotal - 0.01) && calcTotal > 0) {
+                      isPaid = true;
+                  } else if (paidAmount > 0 && paidAmount < calcTotal) {
+                      isPartial = true;
+                  } else if (monthPaymentInfo.status === 'Pago') {
+                      isPaid = true; // Fallback se já estava marcado como pago
+                  }
+              }
+
+              return { 
+                ...e, 
+                _benefitValue: calcTotal, 
+                _dailyTotal: dailyTotal, 
+                _cardDetails: cardDetails, 
+                _empAbsences: empAbsences, 
+                _empBusinessDays: empBusinessDays,
+                _isPaid: isPaid,
+                _isPartial: isPartial,
+                _paidAmount: paidAmount,
+                _remainingAmount: remainingAmount,
+                _paymentDetails: monthPaymentInfo
+              };
             });
           } else if (activeSubTab === 'health') {
             currentList = filteredEmps.filter(e => e.healthInsurance === 'Sim').map(e => {
@@ -1920,7 +1957,7 @@
             const val = Number(localAbsences[empId]) || 0;
             const origVal = Number(originalAbsences[empId]) || 0;
             
-            if (val === origVal) return; // Evita salvar se não houve mudança real no número
+            if (val === origVal) return; // Evita salvar se não houve alteração real
 
             try {
               const docRef = doc(db, `${basePath}/employees/${empId}`);
@@ -1933,14 +1970,14 @@
               setOriginalAbsences(prev => ({ ...prev, [empId]: val })); // Atualiza a base local
               logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no VT (${filterMonth}/${filterYear})`);
             } catch (err) {
-              console.error("Erro ao salvar faltas", err);
-              showToast('Erro ao salvar faltas no sistema.', 'error');
+              console.error("Erro ao guardar faltas", err);
+              showToast('Erro ao guardar faltas no sistema.', 'error');
             }
           };
 
           const handleVerifyEmployee = async (id, name, lastModifiedBy) => {
             if (lastModifiedBy === appUser.username) {
-               showToast("A conferência de segurança deve ser realizada por outro usuário.", "error");
+               showToast("A conferência de segurança deve ser realizada por outro utilizador.", "error");
                return;
             }
             try {
@@ -1956,16 +1993,85 @@
             }
           };
 
+          // ====== LÓGICA DO MODAL DE PAGAMENTO DO VT (PARCIAL E INTEGRAL) ======
+          const openVtPayModal = (emp) => {
+             setVtEmployeeToPay(emp);
+             setVtPayForm([{ 
+               method: 'Site SpTrans', 
+               date: new Date().toLocaleDateString('pt-BR'), 
+               amount: (emp._remainingAmount || 0).toFixed(2) 
+             }]);
+             setVtPayModalOpen(true);
+          };
+
+          const handleVtPayChange = (index, field, value) => {
+             const newForm = [...vtPayForm];
+             newForm[index][field] = value;
+             setVtPayForm(newForm);
+          };
+
+          const addVtPayMethod = () => {
+             setVtPayForm([...vtPayForm, { method: 'Site SpTrans', date: new Date().toLocaleDateString('pt-BR'), amount: '' }]);
+          };
+
+          const removeVtPayMethod = (index) => {
+             setVtPayForm(vtPayForm.filter((_, i) => i !== index));
+          };
+
+          const confirmVtPayment = async (e) => {
+             e.preventDefault();
+             if (!canWrite || !db || !vtEmployeeToPay) return;
+
+             // Verifica se preencheu tudo
+             const hasEmpty = vtPayForm.some(p => !p.date || !p.amount || Number(p.amount) <= 0);
+             if (hasEmpty) {
+                showToast("Preencha a data e o valor corretamente em todos os métodos.", "error");
+                return;
+             }
+
+             // Junta os pagamentos novos com os que já existiam
+             const currentDetails = vtEmployeeToPay._paymentDetails?.details || [];
+             const newDetails = [...currentDetails, ...vtPayForm];
+             const newPaidTotal = newDetails.reduce((a,b) => a + Number(b.amount || 0), 0);
+             
+             // Define o status (Pago se o total atingir ou passar o valor do benefício)
+             const isFullyPaid = newPaidTotal >= (vtEmployeeToPay._benefitValue - 0.01);
+             const newStatus = isFullyPaid ? 'Pago' : 'Parcial';
+
+             try {
+               const docRef = doc(db, `${basePath}/employees/${vtEmployeeToPay.id}`);
+               await setDoc(docRef, {
+                  transportPayments: {
+                     [monthKey]: {
+                        status: newStatus,
+                        details: newDetails,
+                        lastPaidAt: new Date().toISOString(),
+                        lastPaidBy: appUser.name
+                     }
+                  }
+               }, { merge: true });
+
+               logAction('Pagamento', 'Benefícios', `Registou pagamento ${newStatus === 'Pago' ? 'Integral' : 'Parcial'} de VT para ${vtEmployeeToPay.name} (${filterMonth}/${filterYear})`);
+               showToast(newStatus === 'Pago' ? 'Pagamento de Vale Transporte concluído com sucesso!' : 'Pagamento parcial registado com sucesso. Valor restante continua pendente.');
+               setVtPayModalOpen(false);
+             } catch(err) {
+               console.error("Erro ao registar pagamento VT", err);
+               showToast('Erro ao registar o pagamento.', 'error');
+             }
+          };
+          // ======================================================================
+
           const handleExportCSV = () => {
             let headers = [];
             let rows = [];
 
             if (activeSubTab === 'transport') {
-              headers = ['Nome', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Detalhes dos Cartoes', 'Custo Diario Total', 'Dias Uteis do Colaborador', 'Faltas Informadas', 'Valor Total Liquido'];
+              headers = ['Nome', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Detalhes dos Cartoes', 'Custo Diario Total', 'Dias Uteis do Colaborador', 'Faltas Informadas', 'Valor Total Liquido', 'Status Pagamento'];
               rows = currentList.map(e => [
                 `"${e.name || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`,
                 `"${e._cardDetails || ''}"`, `"${formatCurrency(e._dailyTotal).replace('R$', '').trim()}"`,
-                `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`
+                `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`,
+                `"${e._isPaid ? 'Pago' : (e._isPartial ? 'Parcial' : 'Pendente')}"`
               ]);
             } else {
               headers = ['Nome', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Detalhes do Beneficio', 'Valor'];
@@ -2066,7 +2172,7 @@
               <Card className="p-2 relative z-10">
                 <div className="overflow-x-auto custom-scrollbar">
                   {activeSubTab === 'transport' ? (
-                    <table className="w-full text-left border-collapse min-w-[1000px]">
+                    <table className="w-full text-left border-collapse min-w-[1100px]">
                       <thead>
                         <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
                           <th className="p-4 font-medium">Colaborador</th>
@@ -2074,7 +2180,7 @@
                           <th className="p-4 font-medium text-center">Dias Úteis<br/><span className="text-[10px] opacity-70">(Individuais)</span></th>
                           <th className="p-4 font-medium w-32 text-center">Faltas no Mês</th>
                           <th className="p-4 font-medium text-right">Valor Total</th>
-                          <th className="p-4 font-medium text-center">Ações</th>
+                          <th className="p-4 font-medium text-center">Controlo Pagto.</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2084,7 +2190,7 @@
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
                                 {emp.isVerified === false && (
-                                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro usuário">
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">
                                     Pendente
                                   </span>
                                 )}
@@ -2105,8 +2211,8 @@
                             </td>
                             <td className="p-4">
                                <input type="number" min="0" max={emp._empBusinessDays}
-                                      disabled={!canWrite}
-                                      className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50`}
+                                      disabled={!canWrite || emp._isPaid || emp._isPartial}
+                                      className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
                                       value={localAbsences[emp.id] !== undefined ? localAbsences[emp.id] : ''}
                                       onChange={e => {
                                         let val = e.target.value.replace(/\D/g, '');
@@ -2115,18 +2221,42 @@
                                       }}
                                       onBlur={() => handleAbsenceBlur(emp.id, emp.name)}
                                       placeholder="0"
-                                      title="Dias que não precisará de VT neste mês"
+                                      title={(emp._isPaid || emp._isPartial) ? "Faltas bloqueadas pois já existe um pagamento registado neste mês." : "Dias que não precisará de VT neste mês"}
                                />
                             </td>
                             <td className="p-4 text-right font-bold text-emerald-600 dark:text-emerald-400 text-lg">
                               {formatCurrency(emp._benefitValue)}
                             </td>
                             <td className="p-4 text-center">
-                               <div className="flex justify-center">
+                               <div className="flex justify-center items-center gap-2">
                                  {emp.isVerified === false && canWrite && (
-                                    <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência">
+                                    <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência de Faltas">
                                       <ShieldCheck size={18} />
                                     </button>
+                                 )}
+                                 
+                                 {emp._isPaid ? (
+                                    <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title="Pagamento deste mês já efetuado na totalidade">
+                                      <CheckCircle size={14} /> Pago
+                                    </span>
+                                 ) : (
+                                    <>
+                                      {emp._isPartial && (
+                                         <span className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold flex items-center gap-1 border border-blue-200 dark:border-blue-800/50 cursor-default" title={`Falta pagar: ${formatCurrency(emp._remainingAmount)}`}>
+                                           Parcial
+                                         </span>
+                                      )}
+                                      {canWrite && (
+                                        <button 
+                                          onClick={() => openVtPayModal(emp)}
+                                          disabled={emp.isVerified === false || emp._benefitValue <= 0}
+                                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.isVerified === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
+                                          title={emp.isVerified === false ? "Aguardando conferência de faltas" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento do VT"}
+                                        >
+                                          <DollarSign size={14} /> {emp._isPartial ? 'Restante' : 'Pagar'}
+                                        </button>
+                                      )}
+                                    </>
                                  )}
                                </div>
                             </td>
@@ -2156,7 +2286,7 @@
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
                                 {emp.isVerified === false && (
-                                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro usuário">
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">
                                     Pendente
                                   </span>
                                 )}
@@ -2193,6 +2323,100 @@
                   )}
                 </div>
               </Card>
+
+              {/* Modal de Pagamento do Vale Transporte */}
+              <Modal isOpen={vtPayModalOpen} onClose={() => setVtPayModalOpen(false)} title={`Pagar Vale Transporte - ${vtEmployeeToPay?.name}`}>
+                <form onSubmit={confirmVtPayment} className="space-y-6">
+                  
+                  <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col items-center text-center">
+                    <span className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Valor Restante a Pagar ({filterMonth}/{filterYear})</span>
+                    <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 my-1">{formatCurrency(vtEmployeeToPay?._remainingAmount)}</span>
+                    <span className="text-sm text-emerald-700 dark:text-emerald-500">
+                      Total Devido: {formatCurrency(vtEmployeeToPay?._benefitValue)}
+                    </span>
+                  </div>
+
+                  {vtEmployeeToPay?._paymentDetails?.details && vtEmployeeToPay._paymentDetails.details.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Pagamentos Já Realizados</h3>
+                      {vtEmployeeToPay._paymentDetails.details.map((p, idx) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 text-sm">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle size={16} className="text-emerald-500" />
+                            <span className="font-medium text-slate-700 dark:text-slate-300">{p.method}</span>
+                            <span className="text-slate-500">({p.date})</span>
+                          </div>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-4 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Formas de Pagamento</h3>
+                    {vtPayForm.map((item, index) => (
+                      <div key={index} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4 relative">
+                        <div className="flex justify-between items-center mb-1">
+                          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lançamento {index + 1}</h4>
+                          {vtPayForm.length > 1 && (
+                            <button type="button" onClick={() => removeVtPayMethod(index)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 rounded-lg transition-colors">
+                              <X size={16} />
+                            </button>
+                          )}
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <Select 
+                            label="Método" theme={theme} required value={item.method} 
+                            onChange={e => handleVtPayChange(index, 'method', e.target.value)}
+                            options={[ {value: 'Site SpTrans', label: 'Site SpTrans'}, {value: 'Em Conta', label: 'Em Conta'}, {value: 'Recarga na Maquininha', label: 'Recarga na Maquininha'} ]} 
+                          />
+                          <Input 
+                            label="Data do Pagto." type="text" placeholder="DD/MM/AAAA" theme={theme} required 
+                            value={item.date} 
+                            onChange={e => {
+                              let val = e.target.value.replace(/\D/g, ''); 
+                              if (val.length > 8) val = val.slice(0, 8);
+                              let formattedDate = val;
+                              if (val.length > 4) formattedDate = `${val.slice(0, 2)}/${val.slice(2, 4)}/${val.slice(4)}`;
+                              else if (val.length > 2) formattedDate = `${val.slice(0, 2)}/${val.slice(2)}`;
+                              handleVtPayChange(index, 'date', formattedDate);
+                            }} 
+                          />
+                          <Input 
+                            label="Valor Divisão (R$)" type="text" theme={theme} required 
+                            value={displayCurrencyMask(item.amount)} 
+                            onChange={e => {
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (!val) return handleVtPayChange(index, 'amount', '');
+                              handleVtPayChange(index, 'amount', (Number(val) / 100).toFixed(2));
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <Button type="button" variant="ghost" theme={theme} icon={Plus} onClick={addVtPayMethod} className="w-full border border-dashed border-slate-300 dark:border-slate-600 mt-2">
+                      Adicionar outra forma de pagamento
+                    </Button>
+                  </div>
+
+                  {vtPayForm.length > 1 && (
+                    <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50">
+                      <span className="text-sm font-bold text-blue-800 dark:text-blue-300">Total a Lançar Agora:</span>
+                      <span className={`text-lg font-black ${vtPayForm.reduce((a,b) => a + Number(b.amount || 0), 0) === Number(vtEmployeeToPay?._remainingAmount || 0) ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-500'}`}>
+                        {formatCurrency(vtPayForm.reduce((a,b) => a + Number(b.amount || 0), 0))}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                    <Button variant="ghost" theme={theme} type="button" onClick={() => setVtPayModalOpen(false)}>Cancelar</Button>
+                    <Button variant="primary" theme={theme} type="submit" icon={CheckCircle}>Confirmar Pagamento</Button>
+                  </div>
+                </form>
+              </Modal>
+
             </div>
           );
         }
