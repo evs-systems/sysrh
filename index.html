@@ -1816,12 +1816,20 @@
             { value: String(today.getFullYear() + 1), label: String(today.getFullYear() + 1) }
           ];
 
-          // Estado local para as faltas (VT e Combustível)
+          // Estado local para as faltas (VT, Combustível e Alimentação)
           const [localAbsences, setLocalAbsences] = useState({});
           const [originalAbsences, setOriginalAbsences] = useState({});
 
           const [localFuelAbsences, setLocalFuelAbsences] = useState({});
           const [originalFuelAbsences, setOriginalFuelAbsences] = useState({});
+
+          const [localFoodAbsences, setLocalFoodAbsences] = useState({});
+          const [originalFoodAbsences, setOriginalFoodAbsences] = useState({});
+
+          // Estado local para as Premiações (Vale Alimentação)
+          const [localFoodRewardEnabled, setLocalFoodRewardEnabled] = useState({});
+          const [localFoodRewardValue, setLocalFoodRewardValue] = useState({});
+          const [originalFoodRewards, setOriginalFoodRewards] = useState({});
 
           // Estados para os Modais de Pagamento
           const [vtPayModalOpen, setVtPayModalOpen] = useState(false);
@@ -1836,12 +1844,30 @@
           const [fuelBulkSelected, setFuelBulkSelected] = useState([]);
           const [fuelBulkDate, setFuelBulkDate] = useState('');
 
+          const [foodPayModalOpen, setFoodPayModalOpen] = useState(false);
+          const [foodEmployeeToPay, setFoodEmployeeToPay] = useState(null);
+          const [foodPayDate, setFoodPayDate] = useState('');
+
+          const [foodBulkModalOpen, setFoodBulkModalOpen] = useState(false);
+          const [foodBulkSelected, setFoodBulkSelected] = useState([]);
+          const [foodBulkDate, setFoodBulkDate] = useState('');
+
+          const [foodRewardBulkModalOpen, setFoodRewardBulkModalOpen] = useState(false);
+          const [foodRewardBulkValue, setFoodRewardBulkValue] = useState('');
+
+          const [isPrinting, setIsPrinting] = useState(false);
+
           const safeEmployees = Array.isArray(employees) ? employees : [];
           const activeEmployees = safeEmployees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
           useEffect(() => {
             const loadedAbsences = {};
             const loadedFuelAbsences = {};
+            const loadedFoodAbsences = {};
+            const loadedFoodRewardEnabled = {};
+            const loadedFoodRewardValue = {};
+            const loadedOriginalRewards = {};
+            
             activeEmployees.forEach(emp => {
               if (emp.transportAbsences && emp.transportAbsences[monthKey] !== undefined) {
                 loadedAbsences[emp.id] = emp.transportAbsences[monthKey];
@@ -1849,11 +1875,24 @@
               if (emp.fuelAbsences && emp.fuelAbsences[monthKey] !== undefined) {
                 loadedFuelAbsences[emp.id] = emp.fuelAbsences[monthKey];
               }
+              if (emp.foodAbsences && emp.foodAbsences[monthKey] !== undefined) {
+                loadedFoodAbsences[emp.id] = emp.foodAbsences[monthKey];
+              }
+              if (emp.foodRewards && emp.foodRewards[monthKey] !== undefined) {
+                loadedFoodRewardEnabled[emp.id] = emp.foodRewards[monthKey].enabled || false;
+                loadedFoodRewardValue[emp.id] = emp.foodRewards[monthKey].value || '';
+                loadedOriginalRewards[emp.id] = emp.foodRewards[monthKey];
+              }
             });
             setLocalAbsences(loadedAbsences);
             setOriginalAbsences(loadedAbsences);
             setLocalFuelAbsences(loadedFuelAbsences);
             setOriginalFuelAbsences(loadedFuelAbsences);
+            setLocalFoodAbsences(loadedFoodAbsences);
+            setOriginalFoodAbsences(loadedFoodAbsences);
+            setLocalFoodRewardEnabled(loadedFoodRewardEnabled);
+            setLocalFoodRewardValue(loadedFoodRewardValue);
+            setOriginalFoodRewards(loadedOriginalRewards);
           }, [employees, monthKey]);
 
           const companiesList = [...new Set(activeEmployees.map(e => e.company).filter(Boolean))].sort();
@@ -1886,16 +1925,11 @@
                   baseMonToFri++;
                 } else if (dayOfWeek === 6) {
                   allSats++;
-                  // Calcula quantas semanas se passaram desde a âncora
                   const diffTime = date.getTime() - anchorSat.getTime();
                   const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
                   const weeksDiff = Math.floor(diffDays / 7);
-                  
-                  if (Math.abs(weeksDiff) % 2 === 0) {
-                      escala1Sats++;
-                  } else {
-                      escala2Sats++;
-                  }
+                  if (Math.abs(weeksDiff) % 2 === 0) escala1Sats++;
+                  else escala2Sats++;
                 }
               }
             }
@@ -1916,14 +1950,10 @@
           if (activeSubTab === 'transport') {
             currentList = filteredEmps.filter(e => e.transportVoucher === 'Sim').map(e => {
               let empBusinessDays = monthData.baseMonToFri;
-              if (e.saturdayShift === 'Todos os sábados') {
-                  empBusinessDays += monthData.allSats;
-              } else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') {
-                      empBusinessDays += monthData.escala1Sats;
-                  } else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') {
-                      empBusinessDays += monthData.escala2Sats;
-                  }
+              if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
+              else if (e.saturdayShift === 'Sábados alternados') {
+                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') empBusinessDays += monthData.escala2Sats;
               }
 
               let dailyTotal = (e.transportCards || []).reduce((acc, c) => acc + (Number(c.valuePerDay) || 0), 0);
@@ -1932,11 +1962,7 @@
               
               let parsedCards = (e.transportCards || []).map((c, i) => {
                   const cardTotal = (Number(c.valuePerDay) || 0) * payableDays;
-                  return {
-                      name: c.name || `Cartão ${i+1}`,
-                      valuePerDay: Number(c.valuePerDay) || 0,
-                      total: cardTotal
-                  };
+                  return { name: c.name || `Cartão ${i+1}`, valuePerDay: Number(c.valuePerDay) || 0, total: cardTotal };
               });
 
               let cardDetails = parsedCards.map(c => `${c.name}: ${formatCurrency(c.valuePerDay)}/dia`).join(' | ');
@@ -1961,18 +1987,12 @@
               totalValue += calcTotal;
               
               const remainingAmount = Math.max(0, calcTotal - paidAmount);
-              
-              let isPaid = false;
-              let isPartial = false;
+              let isPaid = false; let isPartial = false;
 
               if (monthPaymentInfo) {
-                  if (paidAmount >= (calcTotal - 0.01) && calcTotal > 0) {
-                      isPaid = true;
-                  } else if (paidAmount > 0 && paidAmount < calcTotal) {
-                      isPartial = true;
-                  } else if (monthPaymentInfo.status === 'Pago') {
-                      isPaid = true; 
-                  }
+                  if (paidAmount >= (calcTotal - 0.01) && calcTotal > 0) isPaid = true;
+                  else if (paidAmount > 0 && paidAmount < calcTotal) isPartial = true;
+                  else if (monthPaymentInfo.status === 'Pago') isPaid = true; 
               }
 
               return { 
@@ -1999,14 +2019,10 @@
           } else if (activeSubTab === 'fuel') {
             currentList = filteredEmps.filter(e => e.fuelAllowance === 'Sim').map(e => {
               let empBusinessDays = monthData.baseMonToFri;
-              if (e.saturdayShift === 'Todos os sábados') {
-                  empBusinessDays += monthData.allSats;
-              } else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') {
-                      empBusinessDays += monthData.escala1Sats;
-                  } else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') {
-                      empBusinessDays += monthData.escala2Sats;
-                  }
+              if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
+              else if (e.saturdayShift === 'Sábados alternados') {
+                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') empBusinessDays += monthData.escala2Sats;
               }
 
               let dailyTotal = Number(e.fuelAllowanceValue) || 0;
@@ -2037,6 +2053,52 @@
                 _paymentDetails: monthPaymentInfo
               };
             });
+          } else if (activeSubTab === 'food') {
+            currentList = filteredEmps.filter(e => e.foodVoucher === 'Sim').map(e => {
+              let empBusinessDays = monthData.baseMonToFri;
+              if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
+              else if (e.saturdayShift === 'Sábados alternados') {
+                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') empBusinessDays += monthData.escala2Sats;
+              }
+
+              let dailyTotal = Number(e.foodVoucherValue) || 0;
+              const empAbsences = Number(localFoodAbsences[e.id]) || 0;
+              const payableDays = Math.max(0, empBusinessDays - empAbsences);
+              
+              const empRewardEnabled = localFoodRewardEnabled[e.id] || false;
+              const empRewardValue = Number(localFoodRewardValue[e.id]) || 0;
+              let rewardTotal = empRewardEnabled ? empRewardValue : 0;
+              let vaTotal = dailyTotal * payableDays;
+
+              const monthPaymentInfo = e.foodPayments?.[monthKey];
+              let calcTotal = 0;
+
+              if (monthPaymentInfo && monthPaymentInfo.lockedTotal !== undefined) {
+                 calcTotal = monthPaymentInfo.lockedTotal;
+                 dailyTotal = monthPaymentInfo.lockedDailyTotal;
+                 empBusinessDays = monthPaymentInfo.lockedBusinessDays || empBusinessDays;
+                 vaTotal = monthPaymentInfo.lockedVaTotal !== undefined ? monthPaymentInfo.lockedVaTotal : calcTotal;
+                 rewardTotal = monthPaymentInfo.lockedRewardTotal !== undefined ? monthPaymentInfo.lockedRewardTotal : 0;
+              } else {
+                 calcTotal = vaTotal + rewardTotal;
+              }
+
+              totalValue += calcTotal;
+              const isPaid = monthPaymentInfo?.status === 'Pago';
+
+              return { 
+                ...e, 
+                _benefitValue: calcTotal, 
+                _vaTotal: vaTotal,
+                _rewardTotal: rewardTotal,
+                _dailyTotal: dailyTotal, 
+                _empAbsences: empAbsences, 
+                _empBusinessDays: empBusinessDays,
+                _isPaid: isPaid,
+                _paymentDetails: monthPaymentInfo
+              };
+            });
           }
 
           if (filterStatus) {
@@ -2046,7 +2108,24 @@
             });
           }
 
-          // Salvar Faltas de VT e Combustível
+          // ====== CÁLCULO DE TOTAIS POR MÉTODO DE PAGAMENTO ======
+          let paymentMethodTotals = {};
+          if (activeSubTab === 'transport') {
+             currentList.forEach(emp => {
+                if (emp._paymentDetails && emp._paymentDetails.details) {
+                   emp._paymentDetails.details.forEach(payment => {
+                      const method = payment.method || 'Outro';
+                      const amount = Number(payment.amount) || 0;
+                      if (!paymentMethodTotals[method]) {
+                         paymentMethodTotals[method] = 0;
+                      }
+                      paymentMethodTotals[method] += amount;
+                   });
+                }
+             });
+          }
+
+          // Salvar Faltas de VT, Combustível e Alimentação
           const handleAbsenceBlur = async (empId, empName) => {
             if (!canWrite || !db) return;
             const val = Number(localAbsences[empId]) || 0;
@@ -2055,16 +2134,10 @@
 
             try {
               const docRef = doc(db, `${basePath}/employees/${empId}`);
-              await setDoc(docRef, { 
-                transportAbsences: { [monthKey]: val },
-                isVerified: false, 
-                lastModifiedBy: appUser.username
-              }, { merge: true });
+              await setDoc(docRef, { transportAbsences: { [monthKey]: val }, isVerified: false, lastModifiedBy: appUser.username }, { merge: true });
               setOriginalAbsences(prev => ({ ...prev, [empId]: val }));
               logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no VT (${filterMonth}/${filterYear})`);
-            } catch (err) {
-              showToast('Erro ao guardar faltas no sistema.', 'error');
-            }
+            } catch (err) { showToast('Erro ao guardar faltas.', 'error'); }
           };
 
           const handleFuelAbsenceBlur = async (empId, empName) => {
@@ -2075,34 +2148,58 @@
 
             try {
               const docRef = doc(db, `${basePath}/employees/${empId}`);
-              await setDoc(docRef, { 
-                fuelAbsences: { [monthKey]: val },
-                isVerified: false,
-                lastModifiedBy: appUser.username
-              }, { merge: true });
+              await setDoc(docRef, { fuelAbsences: { [monthKey]: val }, isVerified: false, lastModifiedBy: appUser.username }, { merge: true });
               setOriginalFuelAbsences(prev => ({ ...prev, [empId]: val }));
               logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no Combustível (${filterMonth}/${filterYear})`);
+            } catch (err) { showToast('Erro ao guardar faltas.', 'error'); }
+          };
+
+          const handleFoodAbsenceBlur = async (empId, empName) => {
+            if (!canWrite || !db) return;
+            const val = Number(localFoodAbsences[empId]) || 0;
+            const origVal = Number(originalFoodAbsences[empId]) || 0;
+            if (val === origVal) return;
+
+            try {
+              const docRef = doc(db, `${basePath}/employees/${empId}`);
+              await setDoc(docRef, { foodAbsences: { [monthKey]: val }, isVerified: false, lastModifiedBy: appUser.username }, { merge: true });
+              setOriginalFoodAbsences(prev => ({ ...prev, [empId]: val }));
+              logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no Vale Alimentação (${filterMonth}/${filterYear})`);
+            } catch (err) { showToast('Erro ao guardar faltas.', 'error'); }
+          };
+
+          // Salvar Premiação do Vale Alimentação
+          const handleFoodRewardSave = async (empId, empName, isEnabled, value) => {
+            if (!canWrite || !db) return;
+            
+            const newValObj = { enabled: isEnabled, value: value || '' };
+            const origValObj = originalFoodRewards[empId] || { enabled: false, value: '' };
+
+            if (newValObj.enabled === origValObj.enabled && newValObj.value === origValObj.value) return;
+
+            try {
+                const docRef = doc(db, `${basePath}/employees/${empId}`);
+                await setDoc(docRef, { 
+                  foodRewards: { [monthKey]: newValObj },
+                  isVerified: false,
+                  lastModifiedBy: appUser.username
+                }, { merge: true });
+                setOriginalFoodRewards(prev => ({ ...prev, [empId]: newValObj }));
+                logAction('Atualização', 'Benefícios', `Atualizou premiação para ${empName} no Vale Alimentação (${filterMonth}/${filterYear})`);
             } catch (err) {
-              showToast('Erro ao guardar faltas de combustível.', 'error');
+                showToast('Erro ao guardar premiação.', 'error');
             }
           };
 
           const handleVerifyEmployee = async (id, name, lastModifiedBy) => {
             if (lastModifiedBy === appUser.username) {
-               showToast("A conferência de segurança deve ser realizada por outro utilizador.", "error");
-               return;
+               showToast("A conferência de segurança deve ser realizada por outro utilizador.", "error"); return;
             }
             try {
-              await updateDoc(doc(db, `${basePath}/employees/${id}`), {
-                isVerified: true,
-                verifiedBy: appUser.name,
-                verifiedAt: new Date().toISOString()
-              });
+              await updateDoc(doc(db, `${basePath}/employees/${id}`), { isVerified: true, verifiedBy: appUser.name, verifiedAt: new Date().toISOString() });
               logAction('Conferência', 'Benefícios', `Realizou a conferência de dados/benefícios de ${name}`);
-              showToast('Dados e benefícios conferidos com sucesso!');
-            } catch (error) {
-              showToast('Erro ao conferir dados.', 'error');
-            }
+              showToast('Dados conferidos com sucesso!');
+            } catch (error) { showToast('Erro ao conferir dados.', 'error'); }
           };
 
           // ====== LÓGICA DE PAGAMENTO DO VT ======
@@ -2113,9 +2210,7 @@
           };
 
           const handleVtPayChange = (index, field, value) => {
-             const newForm = [...vtPayForm];
-             newForm[index][field] = value;
-             setVtPayForm(newForm);
+             const newForm = [...vtPayForm]; newForm[index][field] = value; setVtPayForm(newForm);
           };
 
           const addVtPayMethod = () => setVtPayForm([...vtPayForm, { method: 'Site SpTrans', date: new Date().toLocaleDateString('pt-BR'), amount: '' }]);
@@ -2126,7 +2221,7 @@
              if (!canWrite || !db || !vtEmployeeToPay) return;
 
              const hasEmpty = vtPayForm.some(p => !p.date || !p.amount || Number(p.amount) <= 0);
-             if (hasEmpty) return showToast("Preencha a data e o valor corretamente em todos os métodos.", "error");
+             if (hasEmpty) return showToast("Preencha a data e o valor corretamente.", "error");
 
              const currentDetails = vtEmployeeToPay._paymentDetails?.details || [];
              const newDetails = [...currentDetails, ...vtPayForm];
@@ -2143,126 +2238,233 @@
 
              try {
                await setDoc(doc(db, `${basePath}/employees/${vtEmployeeToPay.id}`), {
-                  transportPayments: {
-                     [monthKey]: {
-                        status: newStatus, details: newDetails, lastPaidAt: new Date().toISOString(), lastPaidBy: appUser.name,
-                        lockedTotal, lockedDailyTotal, lockedBusinessDays, lockedCardDetails, lockedParsedCards
-                     }
-                  }
+                  transportPayments: { [monthKey]: { status: newStatus, details: newDetails, lastPaidAt: new Date().toISOString(), lastPaidBy: appUser.name, lockedTotal, lockedDailyTotal, lockedBusinessDays, lockedCardDetails, lockedParsedCards } }
                }, { merge: true });
                logAction('Pagamento', 'Benefícios', `Registou pagamento ${newStatus === 'Pago' ? 'Integral' : 'Parcial'} de VT para ${vtEmployeeToPay.name} (${filterMonth}/${filterYear})`);
                showToast(newStatus === 'Pago' ? 'Pagamento de Vale Transporte concluído com sucesso!' : 'Pagamento parcial registado com sucesso.');
                setVtPayModalOpen(false);
-             } catch(err) {
-               showToast('Erro ao registar o pagamento.', 'error');
-             }
+             } catch(err) { showToast('Erro ao registar o pagamento.', 'error'); }
           };
 
           // ====== LÓGICA DE PAGAMENTO DE COMBUSTÍVEL (INDIVIDUAL E MASSA) ======
-          const openFuelPayModal = (emp) => {
-             setFuelEmployeeToPay(emp);
-             setFuelPayDate(new Date().toLocaleDateString('pt-BR'));
-             setFuelPayModalOpen(true);
-          };
-
+          const openFuelPayModal = (emp) => { setFuelEmployeeToPay(emp); setFuelPayDate(new Date().toLocaleDateString('pt-BR')); setFuelPayModalOpen(true); };
           const confirmFuelPayment = async (e) => {
              e.preventDefault();
              if (!canWrite || !db || !fuelEmployeeToPay) return;
-
-             const lockedTotal = fuelEmployeeToPay._benefitValue;
-             const lockedDailyTotal = fuelEmployeeToPay._dailyTotal;
-             const lockedBusinessDays = fuelEmployeeToPay._empBusinessDays;
-
              try {
                await setDoc(doc(db, `${basePath}/employees/${fuelEmployeeToPay.id}`), {
-                  fuelPayments: {
-                     [monthKey]: {
-                        status: 'Pago', date: fuelPayDate, paidAt: new Date().toISOString(), paidBy: appUser.name,
-                        lockedTotal, lockedDailyTotal, lockedBusinessDays
-                     }
-                  }
+                  fuelPayments: { [monthKey]: { status: 'Pago', date: fuelPayDate, paidAt: new Date().toISOString(), paidBy: appUser.name, lockedTotal: fuelEmployeeToPay._benefitValue, lockedDailyTotal: fuelEmployeeToPay._dailyTotal, lockedBusinessDays: fuelEmployeeToPay._empBusinessDays } }
                }, { merge: true });
-               logAction('Pagamento', 'Benefícios', `Registou pagamento de Combustível para ${fuelEmployeeToPay.name} (${filterMonth}/${filterYear})`);
-               showToast('Pagamento de Vale Combustível concluído com sucesso!');
-               setFuelPayModalOpen(false);
-             } catch(err) {
-               showToast('Erro ao registar o pagamento de combustível.', 'error');
-             }
+               logAction('Pagamento', 'Benefícios', `Registou pagamento de Combustível para ${fuelEmployeeToPay.name}`);
+               showToast('Pagamento de Vale Combustível concluído!'); setFuelPayModalOpen(false);
+             } catch(err) { showToast('Erro ao registar pagamento.', 'error'); }
           };
 
           const openFuelBulkModal = () => {
-              const unpaidEmps = currentList.filter(e => !e._isPaid && e._benefitValue > 0);
-              setFuelBulkSelected(unpaidEmps.map(e => e.id));
-              setFuelBulkDate(new Date().toLocaleDateString('pt-BR'));
-              setFuelBulkModalOpen(true);
+              setFuelBulkSelected(currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(e => e.id));
+              setFuelBulkDate(new Date().toLocaleDateString('pt-BR')); setFuelBulkModalOpen(true);
           };
-
           const toggleFuelBulkSelect = (id) => setFuelBulkSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-
           const confirmFuelBulkPayment = async (e) => {
-              e.preventDefault();
-              if (!canWrite || !db || fuelBulkSelected.length === 0) return;
-
+              e.preventDefault(); if (!canWrite || !db || fuelBulkSelected.length === 0) return;
               try {
                   const promises = fuelBulkSelected.map(empId => {
                       const emp = currentList.find(x => x.id === empId);
-                      return setDoc(doc(db, `${basePath}/employees/${empId}`), {
-                          fuelPayments: {
-                              [monthKey]: {
-                                  status: 'Pago', date: fuelBulkDate, paidAt: new Date().toISOString(), paidBy: appUser.name,
-                                  lockedTotal: emp._benefitValue, lockedDailyTotal: emp._dailyTotal, lockedBusinessDays: emp._empBusinessDays
-                              }
-                          }
-                      }, { merge: true });
+                      return setDoc(doc(db, `${basePath}/employees/${empId}`), { fuelPayments: { [monthKey]: { status: 'Pago', date: fuelBulkDate, paidAt: new Date().toISOString(), paidBy: appUser.name, lockedTotal: emp._benefitValue, lockedDailyTotal: emp._dailyTotal, lockedBusinessDays: emp._empBusinessDays } } }, { merge: true });
                   });
                   await Promise.all(promises);
-                  logAction('Pagamento', 'Benefícios', `Registou pagamento em massa de Combustível para ${fuelBulkSelected.length} colaborador(es) (${filterMonth}/${filterYear})`);
-                  showToast('Pagamentos em massa de combustível registrados com sucesso!');
-                  setFuelBulkModalOpen(false);
-              } catch(err) {
-                  showToast('Erro ao processar pagamentos em massa.', 'error');
+                  logAction('Pagamento', 'Benefícios', `Pagamento em massa de Combustível para ${fuelBulkSelected.length} colaborador(es)`);
+                  showToast('Pagamentos em massa concluídos!'); setFuelBulkModalOpen(false);
+              } catch(err) { showToast('Erro ao processar pagamentos.', 'error'); }
+          };
+
+          // ====== LÓGICA DE PAGAMENTO DE ALIMENTAÇÃO (INDIVIDUAL E MASSA) ======
+          const openFoodPayModal = (emp) => { setFoodEmployeeToPay(emp); setFoodPayDate(new Date().toLocaleDateString('pt-BR')); setFoodPayModalOpen(true); };
+          const confirmFoodPayment = async (e) => {
+             e.preventDefault(); if (!canWrite || !db || !foodEmployeeToPay) return;
+             try {
+               await setDoc(doc(db, `${basePath}/employees/${foodEmployeeToPay.id}`), {
+                  foodPayments: { [monthKey]: { status: 'Pago', date: foodPayDate, paidAt: new Date().toISOString(), paidBy: appUser.name, lockedTotal: foodEmployeeToPay._benefitValue, lockedVaTotal: foodEmployeeToPay._vaTotal, lockedRewardTotal: foodEmployeeToPay._rewardTotal, lockedDailyTotal: foodEmployeeToPay._dailyTotal, lockedBusinessDays: foodEmployeeToPay._empBusinessDays } }
+               }, { merge: true });
+               logAction('Pagamento', 'Benefícios', `Registou pagamento de Alimentação para ${foodEmployeeToPay.name}`);
+               showToast('Pagamento de Vale Alimentação concluído!'); setFoodPayModalOpen(false);
+             } catch(err) { showToast('Erro ao registar pagamento.', 'error'); }
+          };
+
+          const openFoodBulkModal = () => {
+              setFoodBulkSelected(currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(e => e.id));
+              setFoodBulkDate(new Date().toLocaleDateString('pt-BR')); setFoodBulkModalOpen(true);
+          };
+          const toggleFoodBulkSelect = (id) => setFoodBulkSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+          const confirmFoodBulkPayment = async (e) => {
+              e.preventDefault(); if (!canWrite || !db || foodBulkSelected.length === 0) return;
+              try {
+                  const promises = foodBulkSelected.map(empId => {
+                      const emp = currentList.find(x => x.id === empId);
+                      return setDoc(doc(db, `${basePath}/employees/${empId}`), { foodPayments: { [monthKey]: { status: 'Pago', date: foodBulkDate, paidAt: new Date().toISOString(), paidBy: appUser.name, lockedTotal: emp._benefitValue, lockedVaTotal: emp._vaTotal, lockedRewardTotal: emp._rewardTotal, lockedDailyTotal: emp._dailyTotal, lockedBusinessDays: emp._empBusinessDays } } }, { merge: true });
+                  });
+                  await Promise.all(promises);
+                  logAction('Pagamento', 'Benefícios', `Pagamento em massa de Alimentação para ${foodBulkSelected.length} colaborador(es)`);
+                  showToast('Pagamentos em massa concluídos!'); setFoodBulkModalOpen(false);
+              } catch(err) { showToast('Erro ao processar pagamentos.', 'error'); }
+          };
+
+          // ====== LÓGICA DE PREMIAÇÃO EM MASSA (ALIMENTAÇÃO) ======
+          const confirmFoodRewardBulk = async (e) => {
+              e.preventDefault();
+              if (!canWrite || !db) return;
+              if (!foodRewardBulkValue || Number(foodRewardBulkValue) <= 0) {
+                  showToast('Digite um valor válido para a premiação.', 'error');
+                  return;
               }
+
+              const empsToUpdate = currentList.filter(emp => !emp._isPaid);
+              if (empsToUpdate.length === 0) {
+                  showToast('Nenhum colaborador elegível (não pago) na listagem atual.', 'error');
+                  return;
+              }
+
+              const newValObj = { enabled: true, value: foodRewardBulkValue };
+              
+              try {
+                  const promises = empsToUpdate.map(emp => {
+                      const docRef = doc(db, `${basePath}/employees/${emp.id}`);
+                      return setDoc(docRef, {
+                          foodRewards: { [monthKey]: newValObj },
+                          isVerified: false,
+                          lastModifiedBy: appUser.username
+                      }, { merge: true });
+                  });
+
+                  await Promise.all(promises);
+
+                  const newEnabled = { ...localFoodRewardEnabled };
+                  const newValue = { ...localFoodRewardValue };
+                  const newOriginal = { ...originalFoodRewards };
+
+                  empsToUpdate.forEach(emp => {
+                      newEnabled[emp.id] = true;
+                      newValue[emp.id] = foodRewardBulkValue;
+                      newOriginal[emp.id] = newValObj;
+                  });
+
+                  setLocalFoodRewardEnabled(newEnabled);
+                  setLocalFoodRewardValue(newValue);
+                  setOriginalFoodRewards(newOriginal);
+
+                  logAction('Atualização', 'Benefícios', `Aplicou premiação em massa de R$ ${foodRewardBulkValue} para ${empsToUpdate.length} colaborador(es) no Vale Alimentação (${filterMonth}/${filterYear})`);
+                  showToast(`Premiação aplicada para ${empsToUpdate.length} colaborador(es)!`);
+                  setFoodRewardBulkModalOpen(false);
+                  setFoodRewardBulkValue('');
+              } catch (err) {
+                  showToast('Erro ao aplicar premiação em massa.', 'error');
+              }
+          };
+
+          // ====== IMPRESSÃO DE RECIBOS EM MASSA ======
+          const handlePrint = async () => {
+            const empsToPrint = currentList.filter(e => e._benefitValue > 0).sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+            if (empsToPrint.length === 0) {
+              showToast('Nenhum colaborador na listagem atual possui valor para emissão de recibo.', 'error'); return;
+            }
+
+            const receiptsToPrint = [];
+            empsToPrint.forEach(emp => {
+                if (activeSubTab === 'food') {
+                    if (emp._vaTotal > 0) {
+                        receiptsToPrint.push({ emp, title: 'VALE ALIMENTAÇÃO', value: emp._vaTotal, label: 'Vale Alimentação' });
+                    }
+                    if (emp._rewardTotal > 0) {
+                        receiptsToPrint.push({ emp, title: 'PREMIAÇÃO', value: emp._rewardTotal, label: 'Premiação' });
+                    }
+                } else if (activeSubTab === 'transport') {
+                    receiptsToPrint.push({ emp, title: 'VALE TRANSPORTE', value: emp._benefitValue, label: 'Vale Transporte' });
+                } else if (activeSubTab === 'fuel') {
+                    receiptsToPrint.push({ emp, title: 'VALE COMBUSTÍVEL', value: emp._benefitValue, label: 'Vale Combustível' });
+                }
+            });
+
+            if (receiptsToPrint.length === 0) {
+              showToast('Nenhum recibo a ser gerado.', 'error'); return;
+            }
+
+            setIsPrinting(true);
+            try {
+              showToast('Gerando comprovantes, aguarde...', 'success');
+              const jspdfModule = await import('https://esm.sh/jspdf@2.5.1');
+              const jsPDF = jspdfModule.jsPDF;
+              const docPdf = new jsPDF({ orientation: 'landscape', format: 'a4' });
+              
+              for (let i = 0; i < receiptsToPrint.length; i++) {
+                if (i > 0 && i % 2 === 0) docPdf.addPage();
+                const { emp, title: benefitName, value: receiptValue, label: typeLabel } = receiptsToPrint[i];
+                const startX = (i % 2 === 0) ? 15 : 158; 
+                
+                docPdf.setDrawColor(150, 150, 150); docPdf.setLineWidth(0.5); docPdf.setLineDashPattern([3, 3], 0); docPdf.rect(startX, 15, 124, 180); docPdf.setLineDashPattern([], 0); 
+                docPdf.setFont("helvetica", "bold"); docPdf.setFontSize(14); docPdf.text("RECIBO DE PAGAMENTO", startX + 62, 30, { align: "center" });
+                
+                docPdf.setFont("helvetica", "normal"); docPdf.setFontSize(12); docPdf.text(benefitName, startX + 62, 37, { align: "center" });
+                docPdf.setDrawColor(200, 200, 200); docPdf.line(startX + 10, 43, startX + 114, 43);
+                
+                let currentY = 55; docPdf.setFontSize(10);
+                docPdf.setFont("helvetica", "bold"); docPdf.text("Colaborador:", startX + 10, currentY); docPdf.setFont("helvetica", "normal"); docPdf.text(emp.name || "-", startX + 40, currentY); currentY += 8;
+                docPdf.setFont("helvetica", "bold"); docPdf.text("CPF:", startX + 10, currentY); docPdf.setFont("helvetica", "normal"); docPdf.text(formatCPF(emp.cpf) || "-", startX + 40, currentY); currentY += 8;
+                docPdf.setFont("helvetica", "bold"); docPdf.text("Cargo:", startX + 10, currentY); docPdf.setFont("helvetica", "normal"); docPdf.text(emp.role || "-", startX + 40, currentY); currentY += 8;
+                docPdf.setFont("helvetica", "bold"); docPdf.text("Valor:", startX + 10, currentY); docPdf.setFont("helvetica", "normal"); docPdf.text(formatCurrency(receiptValue), startX + 40, currentY); currentY += 8;
+                docPdf.setFont("helvetica", "bold"); docPdf.text("Referência:", startX + 10, currentY); docPdf.setFont("helvetica", "normal"); docPdf.text(`${filterMonth}/${filterYear}`, startX + 40, currentY); currentY += 8;
+                
+                let paymentDate = new Date().toLocaleDateString('pt-BR');
+                if (emp._isPaid && emp._paymentDetails?.paidAt) paymentDate = new Date(emp._paymentDetails.paidAt).toLocaleDateString('pt-BR');
+                else if (emp._isPaid && emp._paymentDetails?.date) paymentDate = emp._paymentDetails.date;
+
+                docPdf.setFont("helvetica", "bold"); docPdf.text("Data Pagto:", startX + 10, currentY); docPdf.setFont("helvetica", "normal"); docPdf.text(paymentDate, startX + 40, currentY); currentY += 15;
+                docPdf.setFillColor(245, 245, 245); docPdf.rect(startX + 10, currentY, 104, 35, "F"); docPdf.setFontSize(9);
+                
+                const entity = emp.company || 'Empresa não informada';
+                const richTextParts = [ { text: `Declaro ter recebido da empresa `, bold: false }, { text: entity, bold: true }, { text: `, o valor de `, bold: false }, { text: formatCurrency(receiptValue), bold: true }, { text: `, referente a `, bold: false }, { text: `${typeLabel}.`, bold: true } ];
+                let curX = startX + 13; let curY = currentY + 7;
+                
+                richTextParts.forEach(part => {
+                  docPdf.setFont("helvetica", part.bold ? "bolditalic" : "italic");
+                  part.text.split(/(\s+)/).forEach(word => {
+                    if (!word) return;
+                    const wordW = docPdf.getTextWidth(word);
+                    if (word.trim() !== "" && curX + wordW > startX + 13 + 78 && curX > startX + 13) { curX = startX + 13; curY += 5; }
+                    if (!(word.trim() === "" && curX === startX + 13)) { docPdf.text(word, curX, curY); curX += wordW; }
+                  });
+                });
+                
+                const sigY = 170; docPdf.setDrawColor(0); docPdf.setLineWidth(0.5); docPdf.line(startX + 20, sigY, startX + 104, sigY);
+                docPdf.setFont("helvetica", "normal"); docPdf.setFontSize(9); docPdf.text("Assinatura do Recebedor", startX + 62, sigY + 5, { align: "center" });
+                docPdf.setFont("helvetica", "bold"); docPdf.text(emp.name || "-", startX + 62, sigY + 10, { align: "center" });
+              }
+              window.open(docPdf.output('bloburl'), '_blank');
+            } catch (err) { showToast('Erro ao gerar PDF.', 'error'); } finally { setIsPrinting(false); }
           };
 
           // ====== EXPORTAÇÃO EXCEL ======
           const handleExportCSV = () => {
-            let headers = [];
-            let rows = [];
+            let headers = []; let rows = [];
 
             if (activeSubTab === 'transport') {
-              headers = ['Nome', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Detalhes dos Cartoes', 'Custo Diario Total', 'Dias Uteis do Colaborador', 'Faltas Informadas', 'Valor Total Liquido', 'Status Pagamento'];
-              rows = currentList.map(e => [
-                `"${e.name || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`,
-                `"${e._cardDetails || ''}"`, `"${formatCurrency(e._dailyTotal).replace('R$', '').trim()}"`,
-                `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`,
-                `"${e._isPaid ? 'Pago' : (e._isPartial ? 'Parcial' : 'Pendente')}"`
-              ]);
+              headers = ['Nome', 'Cargo', 'Unidade', 'Setor', 'Detalhes dos Cartoes', 'Custo Diario', 'Dias Uteis', 'Faltas', 'Valor Total Liquido', 'Status Pagamento'];
+              rows = currentList.map(e => [`"${e.name || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`, `"${e._cardDetails || ''}"`, `"${formatCurrency(e._dailyTotal).replace('R$', '').trim()}"`, `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`, `"${e._isPaid ? 'Pago' : (e._isPartial ? 'Parcial' : 'Pendente')}"`]);
+            } else if (activeSubTab === 'food') {
+              headers = ['Nome', 'CPF', 'Cargo', 'Unidade', 'Setor', 'Valor Diario', 'Dias Uteis', 'Faltas', 'Premiacao Extra', 'Valor Total Liquido', 'Status Pagamento'];
+              rows = currentList.map(e => [`"${e.name || ''}"`, `"${formatCPF(e.cpf) || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`, `"${formatCurrency(e._dailyTotal).replace('R$', '').trim()}"`, `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._rewardTotal).replace('R$', '').trim()}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`, `"${e._isPaid ? 'Pago' : 'Pendente'}"`]);
             } else if (activeSubTab === 'fuel') {
-              headers = ['Nome', 'CPF', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Valor Diario', 'Dias Uteis do Colaborador', 'Faltas Informadas', 'Valor Total Liquido', 'Status Pagamento'];
-              rows = currentList.map(e => [
-                `"${e.name || ''}"`, `"${formatCPF(e.cpf) || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`,
-                `"${formatCurrency(e._dailyTotal).replace('R$', '').trim()}"`,
-                `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`,
-                `"${e._isPaid ? 'Pago' : 'Pendente'}"`
-              ]);
+              headers = ['Nome', 'CPF', 'Cargo', 'Unidade', 'Setor', 'Valor Diario', 'Dias Uteis', 'Faltas', 'Valor Total Liquido', 'Status Pagamento'];
+              rows = currentList.map(e => [`"${e.name || ''}"`, `"${formatCPF(e.cpf) || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`, `"${formatCurrency(e._dailyTotal).replace('R$', '').trim()}"`, `"${e._empBusinessDays}"`, `"${e._empAbsences}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`, `"${e._isPaid ? 'Pago' : 'Pendente'}"`]);
             } else {
-              headers = ['Nome', 'CPF', 'Cargo', 'Unidade', 'Setor de Atuacao', 'Detalhes do Beneficio', 'Valor'];
-              rows = currentList.map(e => [
-                `"${e.name || ''}"`, `"${formatCPF(e.cpf) || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`,
-                `"${e._details || ''}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`
-              ]);
+              headers = ['Nome', 'CPF', 'Cargo', 'Unidade', 'Setor', 'Detalhes do Beneficio', 'Valor'];
+              rows = currentList.map(e => [`"${e.name || ''}"`, `"${formatCPF(e.cpf) || ''}"`, `"${e.role || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`, `"${e._details || ''}"`, `"${formatCurrency(e._benefitValue).replace('R$', '').trim()}"`]);
             }
             
             const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
             const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `relatorio_${activeSubTab}_${monthKey}.csv`;
-            link.click();
-            showToast('Relatório exportado para Excel com sucesso!');
+            const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `relatorio_${activeSubTab}_${monthKey}.csv`; link.click();
           };
 
-          // Ordenação e Paginação (Carregar Mais)
           const sortedList = currentList.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
           const displayedList = sortedList.slice(0, visibleCount);
 
@@ -2271,10 +2473,10 @@
               <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4 mb-4">
                 <div>
                   <h2 className="text-3xl font-bold tracking-tight">
-                    {activeSubTab === 'transport' ? 'Vale Transporte' : activeSubTab === 'health' ? 'Convênio Médico' : 'Vale Combustível'}
+                    {activeSubTab === 'transport' ? 'Vale Transporte' : activeSubTab === 'health' ? 'Convênio Médico' : activeSubTab === 'food' ? 'Vale Alimentação' : 'Vale Combustível'}
                   </h2>
                   <p className="text-slate-500 mt-1">
-                    {activeSubTab === 'transport' || activeSubTab === 'fuel'
+                    {activeSubTab === 'transport' || activeSubTab === 'fuel' || activeSubTab === 'food'
                       ? `Dias úteis calculados individualmente c/ base na escala e feriados.` 
                       : `Acompanhe e exporte os benefícios do mês selecionado.`}
                   </p>
@@ -2284,8 +2486,19 @@
                   <Select label="Mês Referência" theme={theme} className="w-full sm:w-40 text-left" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} options={monthOptions} />
                   <Select label="Ano Referência" theme={theme} className="w-full sm:w-32 text-left" value={filterYear} onChange={e => setFilterYear(e.target.value)} options={yearOptions} />
                   
+                  {(activeSubTab === 'transport' || activeSubTab === 'fuel' || activeSubTab === 'food') && (
+                    <Button theme={theme} variant="secondary" icon={Printer} loading={isPrinting} onClick={handlePrint} className="w-full sm:w-auto">Imprimir Recibos</Button>
+                  )}
+
                   {canWrite && activeSubTab === 'fuel' && (
                     <Button theme={theme} variant="secondary" icon={CheckSquare} onClick={openFuelBulkModal} className="w-full sm:w-auto">Pagar em Massa</Button>
+                  )}
+
+                  {canWrite && activeSubTab === 'food' && (
+                    <>
+                      <Button theme={theme} variant="secondary" icon={Gift} onClick={() => setFoodRewardBulkModalOpen(true)} className="w-full sm:w-auto">Premiação Massa</Button>
+                      <Button theme={theme} variant="secondary" icon={CheckSquare} onClick={openFoodBulkModal} className="w-full sm:w-auto">Pagar em Massa</Button>
+                    </>
                   )}
                   
                   <Button theme={theme} icon={Download} onClick={handleExportCSV} className="w-full sm:w-auto">Exportar Excel</Button>
@@ -2296,9 +2509,10 @@
                 <button onClick={() => setActiveSubTab('transport')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'transport' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Vale Transporte</button>
                 <button onClick={() => setActiveSubTab('health')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'health' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Convênio Médico</button>
                 <button onClick={() => setActiveSubTab('fuel')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'fuel' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Vale Combustível</button>
+                <button onClick={() => setActiveSubTab('food')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'food' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Vale Alimentação</button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10 mb-6">
+              <div className={`grid grid-cols-1 md:grid-cols-2 ${activeSubTab === 'transport' && Object.keys(paymentMethodTotals).length > 0 ? 'lg:grid-cols-3' : ''} gap-6 relative z-10 mb-6`}>
                 <Card className={`p-6 flex flex-col justify-center gap-2 border-l-4 border-${theme.main}-500 transition-transform hover:-translate-y-1`}>
                   <div className={`flex items-center gap-3 text-${theme.main}-600 dark:text-${theme.main}-400 mb-2`}>
                     <div className={`p-3 bg-${theme.main}-100 dark:bg-${theme.main}-900/30 rounded-xl`}><Users size={24} /></div>
@@ -2315,9 +2529,26 @@
                   </div>
                   <h3 className="text-4xl font-black text-slate-800 dark:text-white">{formatCurrency(totalValue)}</h3>
                   <p className="text-sm font-medium text-slate-500 mt-1">
-                    {activeSubTab === 'transport' || activeSubTab === 'fuel' ? `Soma total em ${filterMonth}/${filterYear} (descontando faltas)` : 'Custo mensal do convênio + dependentes'}
+                    {activeSubTab === 'transport' || activeSubTab === 'fuel' || activeSubTab === 'food' ? `Soma total em ${filterMonth}/${filterYear} (descontando faltas)` : 'Custo mensal do convênio + dependentes'}
                   </p>
                 </Card>
+
+                {activeSubTab === 'transport' && Object.keys(paymentMethodTotals).length > 0 && (
+                  <Card className={`p-6 flex flex-col justify-center gap-2 border-l-4 border-blue-500 transition-transform hover:-translate-y-1`}>
+                    <div className="flex items-center gap-3 text-blue-600 dark:text-blue-400 mb-2">
+                      <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl"><BarChart2 size={24} /></div>
+                      <span className="font-bold text-sm uppercase tracking-wider">Pago por Método</span>
+                    </div>
+                    <div className="space-y-1.5 mt-1 w-full">
+                       {Object.entries(paymentMethodTotals).map(([method, total]) => (
+                          <div key={method} className="flex justify-between items-center border-b border-slate-100 dark:border-slate-700/50 pb-1.5 last:border-0 last:pb-0">
+                             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{method}</span>
+                             <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{formatCurrency(total)}</span>
+                          </div>
+                       ))}
+                    </div>
+                  </Card>
+                )}
               </div>
 
               <Card className="p-4 md:p-6 relative z-30 mb-6">
@@ -2433,6 +2664,122 @@
                         {sortedList.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-500 italic">Nenhum colaborador com Vale Transporte ativo.</td></tr>}
                       </tbody>
                     </table>
+                  ) : activeSubTab === 'food' ? (
+                    <table className="w-full text-left border-collapse min-w-[1200px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                          <th className="p-4 font-medium">Colaborador</th>
+                          <th className="p-4 font-medium">CPF</th>
+                          <th className="p-4 font-medium">Escala e Valor Diário</th>
+                          <th className="p-4 font-medium text-center">Dias Úteis<br/><span className="text-[10px] opacity-70">(Individuais)</span></th>
+                          <th className="p-4 font-medium w-32 text-center">Faltas no Mês</th>
+                          <th className="p-4 font-medium text-center">Premiação Extra</th>
+                          <th className="p-4 font-medium text-right">Valor Total</th>
+                          <th className="p-4 font-medium text-center">Controle Pagto.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayedList.map(emp => (
+                          <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="p-4">
+                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                                {emp.name || 'Desconhecido'}
+                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
+                              </div>
+                              <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
+                            </td>
+                            <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
+                            <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
+                               <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                               </div>
+                               <div className="font-bold text-slate-700 dark:text-slate-300 mt-1.5 text-xs">Valor Diário: {formatCurrency(emp._dailyTotal)}</div>
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className="font-bold text-lg text-slate-700 dark:text-slate-200">{emp._empBusinessDays}</span>
+                            </td>
+                            <td className="p-4">
+                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid}
+                                      className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
+                                      value={localFoodAbsences[emp.id] !== undefined ? localFoodAbsences[emp.id] : ''}
+                                      onChange={e => {
+                                        let val = e.target.value.replace(/\D/g, '');
+                                        if (Number(val) > emp._empBusinessDays) val = emp._empBusinessDays.toString();
+                                        setLocalFoodAbsences({...localFoodAbsences, [emp.id]: val});
+                                      }}
+                                      onBlur={() => handleFoodAbsenceBlur(emp.id, emp.name)} placeholder="0"
+                                      title={emp._isPaid ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
+                               />
+                            </td>
+                            <td className="p-4 text-center">
+                               <div className="flex flex-col items-center justify-center gap-2">
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                     <input 
+                                         type="checkbox"
+                                         className={`rounded border-slate-300 text-${theme.main}-600 focus:ring-${theme.main}-500`}
+                                         checked={localFoodRewardEnabled[emp.id] || false}
+                                         disabled={!canWrite || emp._isPaid}
+                                         onChange={(e) => {
+                                             const val = e.target.checked;
+                                             setLocalFoodRewardEnabled(prev => ({...prev, [emp.id]: val}));
+                                             handleFoodRewardSave(emp.id, emp.name, val, localFoodRewardValue[emp.id]);
+                                         }}
+                                     />
+                                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Aplicar</span>
+                                  </label>
+                                  {localFoodRewardEnabled[emp.id] && (
+                                     <input 
+                                         type="text"
+                                         disabled={!canWrite || emp._isPaid}
+                                         className={`w-24 px-2 py-1 text-center text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
+                                         placeholder="R$ 0,00"
+                                         value={localFoodRewardValue[emp.id] ? displayCurrencyMask(localFoodRewardValue[emp.id]) : ''}
+                                         onChange={e => setLocalFoodRewardValue(prev => ({...prev, [emp.id]: formatCurrencyInput(e.target.value)}))}
+                                         onBlur={() => handleFoodRewardSave(emp.id, emp.name, localFoodRewardEnabled[emp.id], localFoodRewardValue[emp.id])}
+                                     />
+                                  )}
+                               </div>
+                            </td>
+                            <td className="p-4 text-right">
+                                {emp._rewardTotal > 0 ? (
+                                   <div className="flex flex-col items-end gap-0.5">
+                                      <div className="text-[10px] text-slate-400">VA: {formatCurrency(emp._vaTotal)}</div>
+                                      <div className="text-[10px] font-medium text-amber-500 dark:text-amber-400">Premiação: {formatCurrency(emp._rewardTotal)}</div>
+                                      <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 border-t pt-0.5 border-slate-200 dark:border-slate-700 mt-0.5">{formatCurrency(emp._benefitValue)}</div>
+                                   </div>
+                                ) : (
+                                   <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
+                                     {formatCurrency(emp._benefitValue)}
+                                   </span>
+                                )}
+                            </td>
+                            <td className="p-4 text-center">
+                               <div className="flex justify-center items-center gap-2">
+                                 {emp.isVerified === false && canWrite && <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
+                                 
+                                 {emp._isPaid ? (
+                                    <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title={`Pago em: ${emp._paymentDetails?.date}`}>
+                                      <CheckCircle size={14} /> Pago
+                                    </span>
+                                 ) : (
+                                    canWrite && (
+                                      <button 
+                                        onClick={() => openFoodPayModal(emp)}
+                                        disabled={emp.isVerified === false || emp._benefitValue <= 0}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.isVerified === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
+                                        title={emp.isVerified === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
+                                      >
+                                        <DollarSign size={14} /> Pagar
+                                      </button>
+                                    )
+                                 )}
+                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {sortedList.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 italic">Nenhum colaborador encontrado para o benefício de Alimentação.</td></tr>}
+                      </tbody>
+                    </table>
                   ) : activeSubTab === 'fuel' ? (
                     <table className="w-full text-left border-collapse min-w-[1100px]">
                       <thead>
@@ -2508,7 +2855,7 @@
                             </td>
                           </tr>
                         ))}
-                        {sortedList.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">Nenhum colaborador com Vale Combustível ativo.</td></tr>}
+                        {sortedList.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">Nenhum colaborador encontrado para o benefício Combustível.</td></tr>}
                       </tbody>
                     </table>
                   ) : (
@@ -2596,7 +2943,7 @@
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Select label="Método" theme={theme} required value={item.method} onChange={e => handleVtPayChange(index, 'method', e.target.value)} options={[ {value: 'Site SpTrans', label: 'Site SpTrans'}, {value: 'Em Conta', label: 'Em Conta'}, {value: 'Recarga na Maquininha', label: 'Recarga na Maquininha'} ]} />
+                          <Select label="Método" theme={theme} required value={item.method} onChange={e => handleVtPayChange(index, 'method', e.target.value)} options={[ {value: 'Site SpTrans', label: 'Site SpTrans'}, {value: 'Em Conta', label: 'Em Conta'}, {value: 'Recarga na Maquininha', label: 'Recarga na Maquininha'}, {value: 'Boleto', label: 'Boleto'} ]} />
                           <Input label="Data do Pagto." type="text" placeholder="DD/MM/AAAA" theme={theme} required value={item.date} 
                             onChange={e => {
                               let val = e.target.value.replace(/\D/g, ''); if (val.length > 8) val = val.slice(0, 8);
@@ -2705,6 +3052,103 @@
                         <Button variant="ghost" theme={theme} type="button" onClick={() => setFuelBulkModalOpen(false)}>Cancelar</Button>
                         <Button variant="primary" theme={theme} type="submit" icon={CheckCircle} disabled={fuelBulkSelected.length === 0}>Pagar ({fuelBulkSelected.length})</Button>
                     </div>
+                </form>
+              </Modal>
+
+              {/* Modal de Pagamento Individual - Vale Alimentação */}
+              <Modal isOpen={foodPayModalOpen} onClose={() => setFoodPayModalOpen(false)} title={`Pagar Vale Alimentação - ${foodEmployeeToPay?.name}`}>
+                <form onSubmit={confirmFoodPayment} className="space-y-6">
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col items-center text-center">
+                        <span className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Valor a Pagar ({filterMonth}/{filterYear})</span>
+                        <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 my-1">{formatCurrency(foodEmployeeToPay?._benefitValue)}</span>
+                    </div>
+                    <div className="space-y-4">
+                      <Input 
+                          label="Data do Pagamento" type="text" placeholder="DD/MM/AAAA" theme={theme} required 
+                          value={foodPayDate} 
+                          onChange={e => {
+                              let val = e.target.value.replace(/\D/g, ''); 
+                              if (val.length > 8) val = val.slice(0, 8);
+                              let formattedDate = val;
+                              if (val.length > 4) formattedDate = `${val.slice(0, 2)}/${val.slice(2, 4)}/${val.slice(4)}`;
+                              else if (val.length > 2) formattedDate = `${val.slice(0, 2)}/${val.slice(2)}`;
+                              setFoodPayDate(formattedDate);
+                          }} 
+                      />
+                    </div>
+                    <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                        <Button variant="ghost" theme={theme} type="button" onClick={() => setFoodPayModalOpen(false)}>Cancelar</Button>
+                        <Button variant="primary" theme={theme} type="submit" icon={CheckCircle}>Confirmar Pagamento</Button>
+                    </div>
+                </form>
+              </Modal>
+
+              {/* Modal de Pagamento em Massa - Vale Alimentação */}
+              <Modal isOpen={foodBulkModalOpen} onClose={() => setFoodBulkModalOpen(false)} title={`Pagamento em Massa - Vale Alimentação`}>
+                <form onSubmit={confirmFoodBulkPayment} className="space-y-4">
+                    <Input 
+                        label="Data do Pagamento" type="text" placeholder="DD/MM/AAAA" theme={theme} required 
+                        value={foodBulkDate} 
+                        onChange={e => {
+                            let val = e.target.value.replace(/\D/g, ''); 
+                            if (val.length > 8) val = val.slice(0, 8);
+                            let formattedDate = val;
+                            if (val.length > 4) formattedDate = `${val.slice(0, 2)}/${val.slice(2, 4)}/${val.slice(4)}`;
+                            else if (val.length > 2) formattedDate = `${val.slice(0, 2)}/${val.slice(2)}`;
+                            setFoodBulkDate(formattedDate);
+                        }} 
+                    />
+                    
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 flex flex-col mt-4">
+                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                            <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Colaboradores Selecionados ({foodBulkSelected.length})</span>
+                            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                                Total: {formatCurrency(currentList.filter(e => foodBulkSelected.includes(e.id)).reduce((acc, curr) => acc + curr._benefitValue, 0))}
+                            </span>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(emp => (
+                                <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => toggleFoodBulkSelect(emp.id)}>
+                                    <div className="flex items-center gap-3">
+                                        {foodBulkSelected.includes(emp.id) ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} className="text-slate-400" />}
+                                        <span className="text-sm font-medium">{emp.name}</span>
+                                    </div>
+                                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(emp._benefitValue)}</span>
+                                </div>
+                            ))}
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).length === 0 && (
+                                <p className="text-sm text-center py-4 text-slate-500">Nenhum colaborador com valor pendente para este mês.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                        <Button variant="ghost" theme={theme} type="button" onClick={() => setFoodBulkModalOpen(false)}>Cancelar</Button>
+                        <Button variant="primary" theme={theme} type="submit" icon={CheckCircle} disabled={foodBulkSelected.length === 0}>Pagar ({foodBulkSelected.length})</Button>
+                    </div>
+                </form>
+              </Modal>
+
+              {/* Modal de Premiação em Massa - Vale Alimentação */}
+              <Modal isOpen={foodRewardBulkModalOpen} onClose={() => setFoodRewardBulkModalOpen(false)} title="Premiação em Massa - Vale Alimentação">
+                <form onSubmit={confirmFoodRewardBulk} className="space-y-4">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                      Este valor será aplicado simultaneamente a todos os <strong>{currentList.filter(e => !e._isPaid).length}</strong> colaboradores atualmente listados (com os filtros ativos) que ainda não receberam o pagamento neste mês.
+                    </p>
+                    <Input 
+                      label="Valor da Premiação Extra (R$)" 
+                      type="text" 
+                      theme={theme} 
+                      required 
+                      value={displayCurrencyMask(foodRewardBulkValue)} 
+                      onChange={e => setFoodRewardBulkValue(formatCurrencyInput(e.target.value))} 
+                    />
+                  </div>
+                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                    <Button variant="ghost" theme={theme} type="button" onClick={() => setFoodRewardBulkModalOpen(false)}>Cancelar</Button>
+                    <Button variant="primary" theme={theme} type="submit" icon={CheckCircle}>Aplicar a Todos</Button>
+                  </div>
                 </form>
               </Modal>
 
@@ -3994,6 +4438,25 @@
                           )}
                         </div>
 
+                        {/* NOVO CAMPO: VALE ALIMENTAÇÃO */}
+                        <div className="mt-4">
+                          <Select 
+                            label="Recebe Vale Alimentação?" theme={theme} required value={formData.foodVoucher || 'Não'} 
+                            onChange={e => setFormData({...formData, foodVoucher: e.target.value})}
+                            options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
+                          />
+                        </div>
+
+                        {formData.foodVoucher === 'Sim' && (
+                          <div className="mt-2 animate-in fade-in slide-in-from-top-2">
+                            <Input 
+                              label="Valor Diário do Vale Alimentação (R$)" type="text" theme={theme} required 
+                              value={displayCurrencyMask(formData.foodVoucherValue)} 
+                              onChange={e => setFormData({...formData, foodVoucherValue: formatCurrencyInput(e.target.value)})} 
+                            />
+                          </div>
+                        )}
+
                         {/* NOVO CAMPO: VALE TRANSPORTE */}
                         <div className="mt-4">
                           <Select 
@@ -5157,7 +5620,7 @@
                     )}
                   </div>
                   
-                  <div className="space-y-4 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
+                  <div className="space-y-4 overflow-visible">
                     {formData.items.map((item, index) => (
                       <div key={index} className="p-4 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-4 relative bg-slate-50/50 dark:bg-slate-800/30">
                         <div className="flex justify-between items-center mb-1">
