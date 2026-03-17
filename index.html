@@ -2134,7 +2134,7 @@
 
             try {
               const docRef = doc(db, `${basePath}/employees/${empId}`);
-              await setDoc(docRef, { transportAbsences: { [monthKey]: val }, isVerified: false, lastModifiedBy: appUser.username }, { merge: true });
+              await setDoc(docRef, { transportAbsences: { [monthKey]: val }, transportVerified: { [monthKey]: false }, lastModifiedByTransport: appUser.username }, { merge: true });
               setOriginalAbsences(prev => ({ ...prev, [empId]: val }));
               logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no VT (${filterMonth}/${filterYear})`);
             } catch (err) { showToast('Erro ao guardar faltas.', 'error'); }
@@ -2148,7 +2148,7 @@
 
             try {
               const docRef = doc(db, `${basePath}/employees/${empId}`);
-              await setDoc(docRef, { fuelAbsences: { [monthKey]: val }, isVerified: false, lastModifiedBy: appUser.username }, { merge: true });
+              await setDoc(docRef, { fuelAbsences: { [monthKey]: val }, fuelVerified: { [monthKey]: false }, lastModifiedByFuel: appUser.username }, { merge: true });
               setOriginalFuelAbsences(prev => ({ ...prev, [empId]: val }));
               logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no Combustível (${filterMonth}/${filterYear})`);
             } catch (err) { showToast('Erro ao guardar faltas.', 'error'); }
@@ -2162,7 +2162,7 @@
 
             try {
               const docRef = doc(db, `${basePath}/employees/${empId}`);
-              await setDoc(docRef, { foodAbsences: { [monthKey]: val }, isVerified: false, lastModifiedBy: appUser.username }, { merge: true });
+              await setDoc(docRef, { foodAbsences: { [monthKey]: val }, foodVerified: { [monthKey]: false }, lastModifiedByFood: appUser.username }, { merge: true });
               setOriginalFoodAbsences(prev => ({ ...prev, [empId]: val }));
               logAction('Atualização', 'Benefícios', `Lançou ${val} falta(s) para ${empName} no Vale Alimentação (${filterMonth}/${filterYear})`);
             } catch (err) { showToast('Erro ao guardar faltas.', 'error'); }
@@ -2181,8 +2181,8 @@
                 const docRef = doc(db, `${basePath}/employees/${empId}`);
                 await setDoc(docRef, { 
                   foodRewards: { [monthKey]: newValObj },
-                  isVerified: false,
-                  lastModifiedBy: appUser.username
+                  foodVerified: { [monthKey]: false },
+                  lastModifiedByFood: appUser.username
                 }, { merge: true });
                 setOriginalFoodRewards(prev => ({ ...prev, [empId]: newValObj }));
                 logAction('Atualização', 'Benefícios', `Atualizou premiação para ${empName} no Vale Alimentação (${filterMonth}/${filterYear})`);
@@ -2191,13 +2191,18 @@
             }
           };
 
-          const handleVerifyEmployee = async (id, name, lastModifiedBy) => {
+          const handleVerifyBenefit = async (id, name, lastModifiedBy) => {
             if (lastModifiedBy === appUser.username) {
                showToast("A conferência de segurança deve ser realizada por outro utilizador.", "error"); return;
             }
             try {
-              await updateDoc(doc(db, `${basePath}/employees/${id}`), { isVerified: true, verifiedBy: appUser.name, verifiedAt: new Date().toISOString() });
-              logAction('Conferência', 'Benefícios', `Realizou a conferência de dados/benefícios de ${name}`);
+              let updateData = {};
+              if (activeSubTab === 'transport') updateData = { [`transportVerified.${monthKey}`]: true };
+              else if (activeSubTab === 'fuel') updateData = { [`fuelVerified.${monthKey}`]: true };
+              else if (activeSubTab === 'food') updateData = { [`foodVerified.${monthKey}`]: true };
+
+              await updateDoc(doc(db, `${basePath}/employees/${id}`), updateData);
+              logAction('Conferência', 'Benefícios', `Realizou a conferência do benefício (${activeSubTab}) de ${name} para ${filterMonth}/${filterYear}`);
               showToast('Dados conferidos com sucesso!');
             } catch (error) { showToast('Erro ao conferir dados.', 'error'); }
           };
@@ -2331,8 +2336,8 @@
                       const docRef = doc(db, `${basePath}/employees/${emp.id}`);
                       return setDoc(docRef, {
                           foodRewards: { [monthKey]: newValObj },
-                          isVerified: false,
-                          lastModifiedBy: appUser.username
+                          foodVerified: { [monthKey]: false },
+                          lastModifiedByFood: appUser.username
                       }, { merge: true });
                   });
 
@@ -2391,7 +2396,7 @@
             setIsPrinting(true);
             try {
               showToast('Gerando comprovantes, aguarde...', 'success');
-              const jspdfModule = await import('https://esm.sh/jspdf@2.5.1');
+              const jspdfModule = await import('[https://esm.sh/jspdf@2.5.1](https://esm.sh/jspdf@2.5.1)');
               const jsPDF = jspdfModule.jsPDF;
               const docPdf = new jsPDF({ orientation: 'landscape', format: 'a4' });
               
@@ -2594,7 +2599,7 @@
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
-                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">Pendente</span>}
+                                {emp.transportVerified?.[monthKey] === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">Pendente</span>}
                               </div>
                               <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
                             </td>
@@ -2641,16 +2646,16 @@
                             </td>
                             <td className="p-4 text-center">
                                <div className="flex justify-center items-center gap-2">
-                                 {emp.isVerified === false && canWrite && <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
+                                 {emp.transportVerified?.[monthKey] === false && canWrite && <button onClick={() => handleVerifyBenefit(emp.id, emp.name, emp.lastModifiedByTransport)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
                                  {emp._isPaid ? (
                                     <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title="Pagamento deste mês já efetuado na totalidade"><CheckCircle size={14} /> Pago</span>
                                  ) : (
                                     <>
                                       {emp._isPartial && <span className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold flex items-center gap-1 border border-blue-200 dark:border-blue-800/50 cursor-default" title={`Falta pagar: ${formatCurrency(emp._remainingAmount)}`}>Parcial</span>}
                                       {canWrite && (
-                                        <button onClick={() => openVtPayModal(emp)} disabled={emp.isVerified === false || emp._benefitValue <= 0}
-                                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.isVerified === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
-                                          title={emp.isVerified === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
+                                        <button onClick={() => openVtPayModal(emp)} disabled={emp.transportVerified?.[monthKey] === false || emp._benefitValue <= 0}
+                                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.transportVerified?.[monthKey] === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
+                                          title={emp.transportVerified?.[monthKey] === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
                                         >
                                           <DollarSign size={14} /> {emp._isPartial ? 'Restante' : 'Pagar'}
                                         </button>
@@ -2684,7 +2689,7 @@
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
-                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
+                                {emp.foodVerified?.[monthKey] === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
                               </div>
                               <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
                             </td>
@@ -2755,7 +2760,7 @@
                             </td>
                             <td className="p-4 text-center">
                                <div className="flex justify-center items-center gap-2">
-                                 {emp.isVerified === false && canWrite && <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
+                                 {emp.foodVerified?.[monthKey] === false && canWrite && <button onClick={() => handleVerifyBenefit(emp.id, emp.name, emp.lastModifiedByFood)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
                                  
                                  {emp._isPaid ? (
                                     <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title={`Pago em: ${emp._paymentDetails?.date}`}>
@@ -2765,9 +2770,9 @@
                                     canWrite && (
                                       <button 
                                         onClick={() => openFoodPayModal(emp)}
-                                        disabled={emp.isVerified === false || emp._benefitValue <= 0}
-                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.isVerified === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
-                                        title={emp.isVerified === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
+                                        disabled={emp.foodVerified?.[monthKey] === false || emp._benefitValue <= 0}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.foodVerified?.[monthKey] === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
+                                        title={emp.foodVerified?.[monthKey] === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
                                       >
                                         <DollarSign size={14} /> Pagar
                                       </button>
@@ -2799,7 +2804,7 @@
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
-                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
+                                {emp.fuelVerified?.[monthKey] === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
                               </div>
                               <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
                             </td>
@@ -2833,7 +2838,7 @@
                             </td>
                             <td className="p-4 text-center">
                                <div className="flex justify-center items-center gap-2">
-                                 {emp.isVerified === false && canWrite && <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
+                                 {emp.fuelVerified?.[monthKey] === false && canWrite && <button onClick={() => handleVerifyBenefit(emp.id, emp.name, emp.lastModifiedByFuel)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>}
                                  
                                  {emp._isPaid ? (
                                     <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50 cursor-default" title={`Pago em: ${emp._paymentDetails?.date}`}>
@@ -2843,9 +2848,9 @@
                                     canWrite && (
                                       <button 
                                         onClick={() => openFuelPayModal(emp)}
-                                        disabled={emp.isVerified === false || emp._benefitValue <= 0}
-                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.isVerified === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
-                                        title={emp.isVerified === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
+                                        disabled={emp.fuelVerified?.[monthKey] === false || emp._benefitValue <= 0}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${emp.fuelVerified?.[monthKey] === false || emp._benefitValue <= 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60'}`}
+                                        title={emp.fuelVerified?.[monthKey] === false ? "Aguardando conferência" : emp._benefitValue <= 0 ? "Valor zerado" : "Efetuar Pagamento"}
                                       >
                                         <DollarSign size={14} /> Pagar
                                       </button>
@@ -2877,7 +2882,7 @@
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name || 'Desconhecido'}
-                                {emp.isVerified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase">Pendente</span>}
+                                {emp.isVerifiedProfile === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase">Pendente</span>}
                               </div>
                             </td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
@@ -2889,8 +2894,8 @@
                             </td>
                             <td className="p-4 text-center">
                                <div className="flex justify-center">
-                                 {emp.isVerified === false && canWrite && (
-                                    <button onClick={() => handleVerifyEmployee(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>
+                                 {emp.isVerifiedProfile === false && canWrite && (
+                                    <button onClick={() => handleVerify(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>
                                  )}
                                </div>
                             </td>
@@ -3857,6 +3862,7 @@
             cep: '', street: '', number: '', complement: '', neighborhood: '', state: '',
             bankName: '', agency: '', account: '', pixType: 'CPF', pixKey: '',
             healthInsurance: 'Não', healthInsuranceValue: '', hasDependents: 'Não', dependentsCount: '', dependentsValue: '', fuelAllowance: 'Não', fuelAllowanceValue: '',
+            foodVoucher: 'Não', foodVoucherValue: '',
             transportVoucher: 'Não', transportCards: [{ name: '', valuePerDay: '' }],
             hasChildren: 'Não', children: [{ name: '', birthDate: '' }],
             hasLoans: 'Não', loans: [{ loanMonth: '', deadlineMonth: '', totalAmount: '', installmentsCount: '', installmentValue: '' }],
@@ -3869,7 +3875,6 @@
           const [searchTerm, setSearchTerm] = useState('');
           const [visibleCount, setVisibleCount] = useState(50);
 
-          // Repõe a contagem visível sempre que o utilizador muda de aba ou faz uma pesquisa
           useEffect(() => {
             setVisibleCount(50);
           }, [activeSubTab, searchTerm]);
@@ -3890,8 +3895,6 @@
           if (activeSubTab === 'emprestimos') currentList = loanEmployees;
 
           const filtered = currentList.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.cpf.includes(searchTerm));
-          
-          // Ordena alfabeticamente pelo nome e limita a exibição
           const sortedFiltered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
           const displayedEmployees = sortedFiltered.slice(0, visibleCount);
 
@@ -3913,7 +3916,7 @@
 
             const payload = {
               ...formData,
-              isVerified: false,
+              isVerifiedProfile: false, // FLAG ISOLADA DE PERFIL
               lastModifiedBy: appUser.username
             };
 
@@ -3940,9 +3943,9 @@
             }
             try {
               await updateDoc(doc(db, `${basePath}/employees/${id}`), {
-                isVerified: true,
-                verifiedBy: appUser.name,
-                verifiedAt: new Date().toISOString()
+                isVerifiedProfile: true, // FLAG ISOLADA DE PERFIL
+                profileVerifiedBy: appUser.name,
+                profileVerifiedAt: new Date().toISOString()
               });
               logAction('Conferência', 'Colaboradores', `Realizou a conferência do cadastro de ${name}`);
               showToast('Cadastro conferido com sucesso!');
@@ -4165,12 +4168,14 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {displayedEmployees.map(emp => (
+                        {displayedEmployees.map(emp => {
+                          const isPendingProfile = emp.isVerifiedProfile === false;
+                          return (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                                 {emp.name}
-                                {emp.isVerified === false && (
+                                {isPendingProfile && (
                                   <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro usuário">
                                     Pendente
                                   </span>
@@ -4204,7 +4209,7 @@
                             </td>
                             {(canWrite || canDelete) && (
                               <td className="p-4 text-right space-x-2 whitespace-nowrap">
-                                {emp.isVerified === false && canWrite && (
+                                {isPendingProfile && canWrite && (
                                   <button onClick={() => handleVerify(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência de Cadastro">
                                     <ShieldCheck size={18} />
                                   </button>
@@ -4214,7 +4219,7 @@
                               </td>
                             )}
                           </tr>
-                        ))}
+                        )})}
                         {displayedEmployees.length === 0 && (
                           <tr><td colSpan={(canWrite || canDelete) ? "5" : "4"} className="p-8 text-center text-slate-500">Nenhum registro encontrado.</td></tr>
                         )}
@@ -4223,7 +4228,6 @@
                   )}
                 </div>
                 
-                {/* Botão de Paginação (Carregar Mais) */}
                 {filtered.length > visibleCount && (
                   <div className="p-4 flex justify-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl mt-2">
                     <Button 
