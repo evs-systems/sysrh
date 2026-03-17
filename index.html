@@ -4419,10 +4419,10 @@
                                 
                                 if (!isNaN(startDateObj.getTime())) {
                                   const date45 = new Date(startDateObj);
-                                  date45.setDate(date45.getDate() + 45); // Soma 45 dias
+                                  date45.setDate(date45.getDate() + 44); // Soma 44 dias (contando o dia de início como dia 1)
                                   
                                   const date90 = new Date(startDateObj);
-                                  date90.setDate(date90.getDate() + 90); // Soma 90 dias
+                                  date90.setDate(date90.getDate() + 89); // Soma 89 dias (contando o dia de início como dia 1)
                                   
                                   const fmt = (date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
                                   
