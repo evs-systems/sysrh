@@ -4412,7 +4412,7 @@
                             label="Data de Início/Admissão" 
                             placeholder="DD/MM/AAAA" 
                             theme={theme} 
-                            required 
+                            required={formData.isContract !== 'Sim'} 
                             value={formData.startDate || ''} 
                             onChange={e => {
                               let val = formatDateInput(e.target.value);
