@@ -4402,7 +4402,37 @@
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Prazos e Exames Médicos</h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <Input label="Data de Início/Admissão" placeholder="DD/MM/AAAA" theme={theme} required value={formData.startDate || ''} onChange={e => setFormData({...formData, startDate: formatDateInput(e.target.value)})} />
+                          <Input 
+                            label="Data de Início/Admissão" 
+                            placeholder="DD/MM/AAAA" 
+                            theme={theme} 
+                            required 
+                            value={formData.startDate || ''} 
+                            onChange={e => {
+                              let val = formatDateInput(e.target.value);
+                              let updates = { startDate: val };
+                              
+                              // Cálculo Automático de Experiência ao completar a data
+                              if (val.length === 10) {
+                                const [d, m, y] = val.split('/');
+                                const startDateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                                
+                                if (!isNaN(startDateObj.getTime())) {
+                                  const date45 = new Date(startDateObj);
+                                  date45.setDate(date45.getDate() + 45); // Soma 45 dias
+                                  
+                                  const date90 = new Date(startDateObj);
+                                  date90.setDate(date90.getDate() + 90); // Soma 90 dias
+                                  
+                                  const fmt = (date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+                                  
+                                  updates.probation45 = fmt(date45);
+                                  updates.probation90 = fmt(date90);
+                                }
+                              }
+                              setFormData({...formData, ...updates});
+                            }} 
+                          />
                           <Input label="Data Exame Admissional" placeholder="DD/MM/AAAA" theme={theme} value={formData.admissionExamDate} onChange={e => setFormData({...formData, admissionExamDate: formatDateInput(e.target.value)})} />
                           <Input label="Fim de Experiência (45 dias)" placeholder="DD/MM/AAAA" theme={theme} value={formData.probation45} onChange={e => setFormData({...formData, probation45: formatDateInput(e.target.value)})} />
                           <Input label="Fim de Experiência (90 dias)" placeholder="DD/MM/AAAA" theme={theme} value={formData.probation90} onChange={e => setFormData({...formData, probation90: formatDateInput(e.target.value)})} />
