@@ -2476,7 +2476,6 @@
             const link = document.createElement('a'); 
             link.href = URL.createObjectURL(blob); 
             
-            // Dicionário de tradução para o nome do arquivo
             const nomesAbasPT = {
               'transport': 'vale_transporte',
               'health': 'convenio_medico',
@@ -2496,19 +2495,36 @@
             <div className="space-y-6 animate-in fade-in duration-500">
               <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4 mb-4">
                 <div>
-                  <h2 className="text-3xl font-bold tracking-tight">{activeSubTab === 'transport' ? 'Vale Transporte' : activeSubTab === 'health' ? 'Convênio Médico' : 'Vale Combustível'}</h2>
-                  <p className="text-slate-500 mt-1">Gestão de benefícios com cálculo individualizado por escala e faltas.</p>
+                  <h2 className="text-3xl font-bold tracking-tight">
+                    {activeSubTab === 'transport' ? 'Vale Transporte' : activeSubTab === 'health' ? 'Convênio Médico' : activeSubTab === 'food' ? 'Vale Alimentação' : 'Vale Combustível'}
+                  </h2>
+                  <p className="text-slate-500 mt-1">
+                    {activeSubTab === 'transport' || activeSubTab === 'fuel' || activeSubTab === 'food'
+                      ? `Dias úteis calculados individualmente c/ base na escala e feriados.` 
+                      : `Acompanhe e exporte os benefícios do mês selecionado.`}
+                  </p>
                 </div>
-                <div className="flex flex-wrap items-end gap-3 w-full xl:w-auto">
-                  <Select label="Mês" theme={theme} className="w-32" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} options={monthOptions} />
-                  <Select label="Ano" theme={theme} className="w-28" value={filterYear} onChange={e => setFilterYear(e.target.value)} options={yearOptions} />
-                  {(activeSubTab === 'transport' || activeSubTab === 'fuel') && (
-                    <Button theme={theme} variant="secondary" icon={Printer} loading={isPrinting} onClick={handlePrint}>Recibos</Button>
+                
+                <div className="flex flex-col sm:flex-row items-end gap-3 w-full xl:w-auto">
+                  <Select label="Mês Referência" theme={theme} className="w-full sm:w-40 text-left" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} options={monthOptions} />
+                  <Select label="Ano Referência" theme={theme} className="w-full sm:w-32 text-left" value={filterYear} onChange={e => setFilterYear(e.target.value)} options={yearOptions} />
+                  
+                  {(activeSubTab === 'transport' || activeSubTab === 'fuel' || activeSubTab === 'food') && (
+                    <Button theme={theme} variant="secondary" icon={Printer} loading={isPrinting} onClick={handlePrint} className="w-full sm:w-auto">Imprimir Recibos</Button>
                   )}
+
                   {canWrite && activeSubTab === 'fuel' && (
-                    <Button theme={theme} variant="secondary" icon={CheckSquare} onClick={openFuelBulkModal}>Pagar Massa</Button>
+                    <Button theme={theme} variant="secondary" icon={CheckSquare} onClick={openFuelBulkModal} className="w-full sm:w-auto">Pagar em Massa</Button>
                   )}
-                  <Button theme={theme} icon={Download} onClick={handleExportCSV}>Exportar Planilha</Button>
+
+                  {canWrite && activeSubTab === 'food' && (
+                    <>
+                      <Button theme={theme} variant="secondary" icon={Gift} onClick={() => setFoodRewardBulkModalOpen(true)} className="w-full sm:w-auto">Premiação Massa</Button>
+                      <Button theme={theme} variant="secondary" icon={CheckSquare} onClick={openFoodBulkModal} className="w-full sm:w-auto">Pagar em Massa</Button>
+                    </>
+                  )}
+                  
+                  <Button theme={theme} icon={Download} onClick={handleExportCSV} className="w-full sm:w-auto">Exportar Planilha</Button>
                 </div>
               </div>
 
