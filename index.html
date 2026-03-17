@@ -2272,7 +2272,7 @@
           };
 
           const openFuelBulkModal = () => {
-              setFuelBulkSelected(currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(e => e.id));
+              setFuelBulkSelected(currentList.filter(e => !e._isPaid && e._benefitValue > 0 && e.fuelVerified?.[monthKey] !== false).map(e => e.id));
               setFuelBulkDate(new Date().toLocaleDateString('pt-BR')); setFuelBulkModalOpen(true);
           };
           const toggleFuelBulkSelect = (id) => setFuelBulkSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -2303,7 +2303,7 @@
           };
 
           const openFoodBulkModal = () => {
-              setFoodBulkSelected(currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(e => e.id));
+              setFoodBulkSelected(currentList.filter(e => !e._isPaid && e._benefitValue > 0 && e.foodVerified?.[monthKey] !== false).map(e => e.id));
               setFoodBulkDate(new Date().toLocaleDateString('pt-BR')); setFoodBulkModalOpen(true);
           };
           const toggleFoodBulkSelect = (id) => setFoodBulkSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -3056,7 +3056,7 @@
                             </span>
                         </div>
                         <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(emp => (
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0 && e.fuelVerified?.[monthKey] !== false).map(emp => (
                                 <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => toggleFuelBulkSelect(emp.id)}>
                                     <div className="flex items-center gap-3">
                                         {fuelBulkSelected.includes(emp.id) ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} className="text-slate-400" />}
@@ -3065,8 +3065,8 @@
                                     <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(emp._benefitValue)}</span>
                                 </div>
                             ))}
-                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).length === 0 && (
-                                <p className="text-sm text-center py-4 text-slate-500">Nenhum colaborador com valor pendente para este mês.</p>
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0 && e.fuelVerified?.[monthKey] !== false).length === 0 && (
+                                <p className="text-sm text-center py-4 text-slate-500">Nenhum colaborador com valor pendente e conferido para este mês.</p>
                             )}
                         </div>
                     </div>
@@ -3130,7 +3130,7 @@
                             </span>
                         </div>
                         <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).map(emp => (
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0 && e.foodVerified?.[monthKey] !== false).map(emp => (
                                 <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => toggleFoodBulkSelect(emp.id)}>
                                     <div className="flex items-center gap-3">
                                         {foodBulkSelected.includes(emp.id) ? <CheckSquare size={18} className={theme.text} /> : <Square size={18} className="text-slate-400" />}
@@ -3139,8 +3139,8 @@
                                     <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(emp._benefitValue)}</span>
                                 </div>
                             ))}
-                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0).length === 0 && (
-                                <p className="text-sm text-center py-4 text-slate-500">Nenhum colaborador com valor pendente para este mês.</p>
+                            {currentList.filter(e => !e._isPaid && e._benefitValue > 0 && e.foodVerified?.[monthKey] !== false).length === 0 && (
+                                <p className="text-sm text-center py-4 text-slate-500">Nenhum colaborador com valor pendente e conferido para este mês.</p>
                             )}
                         </div>
                     </div>
