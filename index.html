@@ -4378,12 +4378,26 @@
                           <Select 
                             label="É Contrato?" theme={theme} required value={formData.isContract} 
                             onChange={e => setFormData({...formData, isContract: e.target.value})}
-                            options={[ {value: 'Não', label: 'Não'}, {value: 'Sim', label: 'Sim'} ]} 
+                            options={[ {value: 'Não', label: 'Não'}, {value: 'Sim', label: 'Sim'}, {value: 'Efetivado', label: 'Efetivado'} ]} 
                           />
-                          {formData.isContract === 'Sim' && (
+                          {(formData.isContract === 'Sim' || formData.isContract === 'Efetivado') && (
                             <>
-                              <Input label="Início do Contrato" placeholder="DD/MM/AAAA" theme={theme} required value={formData.contractStartDate} onChange={e => setFormData({...formData, contractStartDate: formatDateInput(e.target.value)})} />
-                              <Input label="Fim do Contrato" placeholder="DD/MM/AAAA" theme={theme} required value={formData.contractEndDate} onChange={e => setFormData({...formData, contractEndDate: formatDateInput(e.target.value)})} />
+                              <Input 
+                                label="Início do Contrato" placeholder="DD/MM/AAAA" theme={theme} required 
+                                value={formData.contractStartDate} 
+                                onChange={e => setFormData({...formData, contractStartDate: formatDateInput(e.target.value)})} 
+                                readOnly={formData.isContract === 'Efetivado'}
+                                className={formData.isContract === 'Efetivado' ? 'opacity-70 pointer-events-none bg-slate-100 dark:bg-slate-800' : ''}
+                                title={formData.isContract === 'Efetivado' ? 'Histórico bloqueado' : ''}
+                              />
+                              <Input 
+                                label="Fim do Contrato" placeholder="DD/MM/AAAA" theme={theme} required 
+                                value={formData.contractEndDate} 
+                                onChange={e => setFormData({...formData, contractEndDate: formatDateInput(e.target.value)})} 
+                                readOnly={formData.isContract === 'Efetivado'}
+                                className={formData.isContract === 'Efetivado' ? 'opacity-70 pointer-events-none bg-slate-100 dark:bg-slate-800' : ''}
+                                title={formData.isContract === 'Efetivado' ? 'Histórico bloqueado' : ''}
+                              />
                             </>
                           )}
                         </div>
@@ -4391,7 +4405,8 @@
 
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Prazos e Exames Médicos</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <Input label="Data de Início/Admissão" placeholder="DD/MM/AAAA" theme={theme} required value={formData.startDate || ''} onChange={e => setFormData({...formData, startDate: formatDateInput(e.target.value)})} />
                           <Input label="Data Exame Admissional" placeholder="DD/MM/AAAA" theme={theme} value={formData.admissionExamDate} onChange={e => setFormData({...formData, admissionExamDate: formatDateInput(e.target.value)})} />
                           <Input label="Fim de Experiência (45 dias)" placeholder="DD/MM/AAAA" theme={theme} value={formData.probation45} onChange={e => setFormData({...formData, probation45: formatDateInput(e.target.value)})} />
                           <Input label="Fim de Experiência (90 dias)" placeholder="DD/MM/AAAA" theme={theme} value={formData.probation90} onChange={e => setFormData({...formData, probation90: formatDateInput(e.target.value)})} />
@@ -4686,9 +4701,16 @@
           const [printSelections, setPrintSelections] = useState({});
           const [isPrinting, setIsPrinting] = useState(false);
 
+          // Configuração Inicial de Mês e Ano Atual
+          const currentMonthVal = String(new Date().getMonth() + 1).padStart(2, '0');
+          const currentYearVal = String(new Date().getFullYear());
+
           const [historySearchTerm, setHistorySearchTerm] = useState('');
-          const [historyMonthFilter, setHistoryMonthFilter] = useState('all');
-          const [historyYearFilter, setHistoryYearFilter] = useState('all');
+          const [historyMonthFilter, setHistoryMonthFilter] = useState(currentMonthVal);
+          const [historyYearFilter, setHistoryYearFilter] = useState(currentYearVal);
+          
+          const [scheduledMonthFilter, setScheduledMonthFilter] = useState(currentMonthVal);
+          const [scheduledYearFilter, setScheduledYearFilter] = useState(currentYearVal);
           
           const [bulkSearchTerm, setBulkSearchTerm] = useState('');
           
@@ -4712,7 +4734,7 @@
           // Repõe a contagem visível sempre que o utilizador muda de aba ou altera os filtros
           useEffect(() => {
             setVisibleCount(50);
-          }, [activeSubTab, historySearchTerm, historyMonthFilter, historyYearFilter]);
+          }, [activeSubTab, historySearchTerm, historyMonthFilter, historyYearFilter, scheduledMonthFilter, scheduledYearFilter]);
 
           const canWrite = appUser?.permissions?.payments?.write;
           const canDelete = appUser?.permissions?.payments?.delete;
@@ -4779,20 +4801,24 @@
             const payTime = parseDate(pay.date);
             const isPaid = pay.status === 'Pago';
 
+            // Histórico global para a aba de Histórico
             if (isPaid) {
               categorizedPayments.history.push(pay);
             } else {
               if (payTime <= todayTime) { 
                 categorizedPayments.today.push(pay);
-              } else {
-                categorizedPayments.future.push(pay);
               }
-              if (pay.isRecurring) {
-                categorizedPayments.recurring.push(pay);
-              }
+            }
+
+            // Inclusão nas abas Programados e Recorrentes para visualização de histórico do mês
+            if (pay.isRecurring) {
+              categorizedPayments.recurring.push(pay);
+            } else {
+              categorizedPayments.future.push(pay);
             }
           });
 
+          // Filtro para o Histórico Geral
           let displayedHistory = categorizedPayments.history.filter(pay => {
             const empName = pay.category === 'other' ? pay.payeeName : (employees.find(e => e.id === pay.employeeId)?.name || '');
             const searchMatch = empName.toLowerCase().includes(historySearchTerm.toLowerCase()) || 
@@ -4811,12 +4837,45 @@
             return searchMatch && monthMatch && yearMatch;
           });
 
+          // Filtro para Programados (Inclui Pagos e Pendentes daquele mês)
+          let displayedFuture = categorizedPayments.future.filter(pay => {
+            let monthMatch = true;
+            let yearMatch = true;
+            if (pay.date && pay.date.includes('/')) {
+              const [, m, y] = pay.date.split('/');
+              if (scheduledMonthFilter !== 'all') monthMatch = m === scheduledMonthFilter;
+              if (scheduledYearFilter !== 'all') yearMatch = y === scheduledYearFilter;
+            }
+            return monthMatch && yearMatch;
+          });
+
+          // Filtro para Recorrentes (Inclui Pagos e Pendentes daquele mês)
+          let displayedRecurring = categorizedPayments.recurring.filter(pay => {
+            let monthMatch = true;
+            let yearMatch = true;
+            if (pay.date && pay.date.includes('/')) {
+              const [, m, y] = pay.date.split('/');
+              if (scheduledMonthFilter !== 'all') monthMatch = m === scheduledMonthFilter;
+              if (scheduledYearFilter !== 'all') yearMatch = y === scheduledYearFilter;
+            }
+            return monthMatch && yearMatch;
+          });
+
+          // Ordenações
           categorizedPayments.today.sort((a,b) => parseDate(a.date) - parseDate(b.date)); 
-          categorizedPayments.future.sort((a,b) => parseDate(a.date) - parseDate(b.date)); 
-          categorizedPayments.recurring.sort((a,b) => parseDate(a.date) - parseDate(b.date)); 
+          displayedFuture.sort((a,b) => parseDate(a.date) - parseDate(b.date)); 
+          displayedRecurring.sort((a,b) => parseDate(a.date) - parseDate(b.date)); 
           displayedHistory.sort((a,b) => parseDate(b.date) - parseDate(a.date));
 
-          const displayedPayments = activeSubTab === 'history' ? displayedHistory : categorizedPayments[activeSubTab];
+          // Cálculo do Mini-Dashboard de Histórico
+          const historyTotalAmount = displayedHistory.reduce((acc, pay) => acc + Number(pay.amount || 0), 0);
+
+          // Seleciona a lista a ser exibida de acordo com a aba
+          const displayedPayments = activeSubTab === 'history' ? displayedHistory : 
+                                    activeSubTab === 'future' ? displayedFuture : 
+                                    activeSubTab === 'recurring' ? displayedRecurring : 
+                                    categorizedPayments[activeSubTab];
+
           const paginatedPayments = displayedPayments.slice(0, visibleCount);
 
           const selectedPrintCount = Object.values(printSelections).filter(Boolean).length;
@@ -4834,43 +4893,62 @@
             setPrintSelections(newState);
           };
 
+          const handleExportHistoryCSV = () => {
+            const headers = ['Data Pagto.', 'Data Realizado', 'Destinatário', 'Tipo', 'Descrição', 'Banco Origem', 'Valor Total Liquido'];
+            const rows = displayedHistory.map(pay => {
+              const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
+              const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
+              const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
+              return [
+                `"${formatDate(pay.date)}"`,
+                `"${paymentDate}"`,
+                `"${payeeName}"`,
+                `"${pay.type}"`,
+                `"${pay.description || ''}"`,
+                `"${pay.paymentBank || ''}"`,
+                `"${formatCurrency(pay.amount).replace('R$', '').trim()}"`
+              ];
+            });
+            
+            const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a'); 
+            link.href = URL.createObjectURL(blob); 
+            link.download = `historico_pagamentos_${historyMonthFilter}_${historyYearFilter}.csv`; 
+            link.click();
+            showToast('Histórico exportado para Excel com sucesso!');
+          };
+
           const handlePrint = async () => {
             setIsPrinting(true);
             
             try {
               showToast('Gerando comprovantes, aguarde...', 'success');
               
-              // Importação dinâmica e 100% segura direto do CDN em formato módulo
               const jspdfModule = await import('https://esm.sh/jspdf@2.5.1');
               const jsPDF = jspdfModule.jsPDF;
               
-              // Criação do documento A4 em formato Paisagem (Landscape)
               const docPdf = new jsPDF({ orientation: 'landscape', format: 'a4' });
               const paymentsToPrint = payments.filter(p => printSelections[p.id]);
               
               for (let i = 0; i < paymentsToPrint.length; i++) {
-                // A cada 2 recibos, adiciona uma nova folha
                 if (i > 0 && i % 2 === 0) {
                   docPdf.addPage();
                 }
                 
                 const pay = paymentsToPrint[i];
-                const isLeft = i % 2 === 0; // Se é par, desenha na esquerda; se é ímpar, na direita
-                
-                // Coordenadas base: Esquerda = margem 15mm | Direita = Centro (148.5) + margem aprox 10 = 158mm
+                const isLeft = i % 2 === 0; 
                 const startX = isLeft ? 15 : 158; 
                 const startY = 15;
-                const w = 124; // Largura do quadro do recibo
-                const h = 180; // Altura do quadro do recibo
+                const w = 124; 
+                const h = 180; 
                 
-                // Desenha a Borda (Tracejada)
                 docPdf.setDrawColor(150, 150, 150);
                 docPdf.setLineWidth(0.5);
                 docPdf.setLineDashPattern([3, 3], 0);
                 docPdf.rect(startX, startY, w, h);
-                docPdf.setLineDashPattern([], 0); // Reseta a linha para continuar sólida no resto do doc
+                docPdf.setLineDashPattern([], 0); 
                 
-                // Cabeçalho
                 docPdf.setFont("helvetica", "bold");
                 docPdf.setFontSize(14);
                 docPdf.text("RECIBO DE PAGAMENTO", startX + w/2, startY + 15, { align: "center" });
@@ -4879,11 +4957,9 @@
                 docPdf.setFontSize(12);
                 docPdf.text((pay.type || '').toUpperCase(), startX + w/2, startY + 22, { align: "center" });
                 
-                // Linha Separadora do Cabeçalho
                 docPdf.setDrawColor(200, 200, 200);
                 docPdf.line(startX + 10, startY + 28, startX + w - 10, startY + 28);
                 
-                // Processamento dos Dados
                 const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
                 const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
                 const refMonth = pay.date && pay.date.includes('/') ? pay.date.substring(3) : pay.date; 
@@ -4892,14 +4968,12 @@
                 let currentY = startY + 40;
                 docPdf.setFontSize(10);
                 
-                // Linha 1: Nome
                 docPdf.setFont("helvetica", "bold");
                 docPdf.text(pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:', startX + 10, currentY);
                 docPdf.setFont("helvetica", "normal");
                 docPdf.text(payeeName || "-", startX + 40, currentY);
                 currentY += 8;
                 
-                // Linhas exclusivas para funcionário (CPF e Cargo)
                 if (pay.category !== 'other') {
                   docPdf.setFont("helvetica", "bold");
                   docPdf.text("CPF:", startX + 10, currentY);
@@ -4914,35 +4988,30 @@
                   currentY += 8;
                 }
                 
-                // Linha: Valor
                 docPdf.setFont("helvetica", "bold");
                 docPdf.text("Valor:", startX + 10, currentY);
                 docPdf.setFont("helvetica", "normal");
                 docPdf.text(formatCurrency(pay.amount), startX + 40, currentY);
                 currentY += 8;
                 
-                // Linha: Referência
                 docPdf.setFont("helvetica", "bold");
                 docPdf.text("Referência:", startX + 10, currentY);
                 docPdf.setFont("helvetica", "normal");
                 docPdf.text(refMonth || "-", startX + 40, currentY);
                 currentY += 8;
                 
-                // Linha: Data Pagto
                 docPdf.setFont("helvetica", "bold");
                 docPdf.text("Data Pagto:", startX + 10, currentY);
                 docPdf.setFont("helvetica", "normal");
                 docPdf.text(paymentDate || "-", startX + 40, currentY);
                 currentY += 15;
                 
-                // Bloco Cinza de Declaração
                 docPdf.setFillColor(245, 245, 245);
                 docPdf.rect(startX + 10, currentY, w - 20, 35, "F");
                 
                 docPdf.setFontSize(9);
                 const entity = pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type;
                 
-                // Array definindo os pedaços do texto e se são negrito ou não
                 const richTextParts = [
                   { text: `Declaro ter recebido ${pay.category !== 'other' ? 'da empresa ' : 'o valor referente a '}`, bold: false },
                   { text: entity, bold: true },
@@ -4956,19 +5025,16 @@
                 let curY = currentY + 7;
                 const maxW = w - 26;
                 
-                // Lógica para quebrar o texto dinamicamente e manter o estilo
                 richTextParts.forEach(part => {
                   docPdf.setFont("helvetica", part.bold ? "bolditalic" : "italic");
-                  const words = part.text.split(/(\s+)/); // Separa preservando os espaços
+                  const words = part.text.split(/(\s+)/); 
                   words.forEach(word => {
                     if (!word) return;
                     const wordW = docPdf.getTextWidth(word);
-                    // Se a palavra estourar o limite da caixa, pula para a linha de baixo
                     if (word.trim() !== "" && curX + wordW > startX + 13 + maxW && curX > startX + 13) {
                       curX = startX + 13;
-                      curY += 5; // Espaçamento entre as linhas
+                      curY += 5; 
                     }
-                    // Não imprime espaços isolados no início de uma nova linha
                     if (!(word.trim() === "" && curX === startX + 13)) {
                       docPdf.text(word, curX, curY);
                       curX += wordW;
@@ -4976,7 +5042,6 @@
                   });
                 });
                 
-                // Bloco de Assinatura do Recebedor no fim do quadro
                 const sigY = startY + h - 25;
                 docPdf.setDrawColor(0);
                 docPdf.setLineWidth(0.5);
@@ -4989,7 +5054,6 @@
                 docPdf.text(payeeName || "-", startX + w/2, sigY + 10, { align: "center" });
               }
               
-              // Gera a URL (Blob) do PDF pronto e abre numa nova aba para visualização/impressão nativa
               window.open(docPdf.output('bloburl'), '_blank');
               setPrintSelections({});
               
@@ -5359,9 +5423,9 @@
               <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
                 <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit overflow-x-auto">
                   <button onClick={() => setActiveSubTab('today')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'today' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Pendentes (Até Hoje) <span className="ml-1 opacity-60">({categorizedPayments.today.length})</span></button>
-                  <button onClick={() => setActiveSubTab('future')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'future' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Programados <span className="ml-1 opacity-60">({categorizedPayments.future.length})</span></button>
-                  <button onClick={() => setActiveSubTab('recurring')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'recurring' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Recorrentes <span className="ml-1 opacity-60">({categorizedPayments.recurring.length})</span></button>
-                  <button onClick={() => setActiveSubTab('history')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'history' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Histórico <span className="ml-1 opacity-60">({categorizedPayments.history.length})</span></button>
+                  <button onClick={() => setActiveSubTab('future')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'future' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Programados <span className="ml-1 opacity-60">({displayedFuture.length})</span></button>
+                  <button onClick={() => setActiveSubTab('recurring')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'recurring' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Recorrentes <span className="ml-1 opacity-60">({displayedRecurring.length})</span></button>
+                  <button onClick={() => setActiveSubTab('history')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'history' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Histórico <span className="ml-1 opacity-60">({displayedHistory.length})</span></button>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -5369,6 +5433,27 @@
                     <Button theme={theme} icon={Printer} onClick={handlePrint} className="whitespace-nowrap shadow-xl animate-in zoom-in-95 duration-200">
                       Imprimir {selectedPrintCount} Recibo{selectedPrintCount > 1 ? 's' : ''}
                     </Button>
+                  )}
+
+                  {(activeSubTab === 'future' || activeSubTab === 'recurring') && (
+                    <div className="flex flex-col sm:flex-row gap-3 animate-in fade-in duration-300 items-end">
+                      <Select 
+                        label="Mês" 
+                        theme={theme} 
+                        className="w-full sm:w-32"
+                        value={scheduledMonthFilter} 
+                        onChange={e => setScheduledMonthFilter(e.target.value)} 
+                        options={monthOptions}
+                      />
+                      <Select 
+                        label="Ano" 
+                        theme={theme} 
+                        className="w-full sm:w-32"
+                        value={scheduledYearFilter} 
+                        onChange={e => setScheduledYearFilter(e.target.value)} 
+                        options={yearOptions}
+                      />
+                    </div>
                   )}
 
                   {activeSubTab === 'history' && (
@@ -5404,10 +5489,33 @@
                           </div>
                         </div>
                       </div>
+                      <Button theme={theme} icon={Download} onClick={handleExportHistoryCSV} className="w-full sm:w-auto whitespace-nowrap shadow-sm">Exportar Excel</Button>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* MINI-DASHBOARD DE HISTÓRICO */}
+              {activeSubTab === 'history' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 animate-in slide-in-from-bottom-2 duration-500 relative z-10">
+                  <Card className={`p-6 border-l-4 border-${theme.main}-500 transition-transform hover:-translate-y-1`}>
+                    <div className={`flex items-center gap-3 text-${theme.main}-600 dark:text-${theme.main}-400 mb-2`}>
+                      <div className={`p-3 bg-${theme.main}-100 dark:bg-${theme.main}-900/30 rounded-xl`}><FileCheck size={24} /></div>
+                      <span className="font-bold text-sm uppercase tracking-wider">Pagamentos Efetuados</span>
+                    </div>
+                    <h3 className="text-4xl font-black text-slate-800 dark:text-white">{displayedHistory.length}</h3>
+                    <p className="text-sm font-medium text-slate-500 mt-1">no período selecionado</p>
+                  </Card>
+                  <Card className={`p-6 border-l-4 border-emerald-500 transition-transform hover:-translate-y-1`}>
+                    <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400 mb-2">
+                      <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl"><DollarSign size={24} /></div>
+                      <span className="font-bold text-sm uppercase tracking-wider">Valor Total Pago</span>
+                    </div>
+                    <h3 className="text-4xl font-black text-slate-800 dark:text-white">{formatCurrency(historyTotalAmount)}</h3>
+                    <p className="text-sm font-medium text-slate-500 mt-1">no período selecionado</p>
+                  </Card>
+                </div>
+              )}
 
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto custom-scrollbar">
@@ -5450,6 +5558,7 @@
                             <td className="p-4 text-sm font-medium whitespace-nowrap">
                               {formatDate(pay.date)}
                               {isLate && <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400 uppercase">Atrasado</span>}
+                              {pay.status === 'Pago' && <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 uppercase">Pago</span>}
                             </td>
                             <td className="p-4 font-medium">
                               <div className="flex flex-col">
@@ -5488,7 +5597,7 @@
                               {formatCurrency(pay.amount)}
                             </td>
                             <td className="p-4 text-center">
-                              {activeSubTab === 'history' ? (
+                              {pay.status === 'Pago' ? (
                                 <div className="flex items-center justify-center gap-2">
                                   {pay.receiptUrl || pay.receiptBase64 ? (
                                     <button 
