@@ -3259,7 +3259,22 @@
                 <div className="flex flex-col md:flex-row items-end gap-4">
                   <Select 
                     label="Visualizar por" theme={theme} className="w-full md:w-48"
-                    value={filterType} onChange={e => setFilterType(e.target.value)}
+                    value={filterType} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      setFilterType(val);
+                      
+                      // Restaura sempre para a data atual ao trocar de filtro
+                      const now = new Date();
+                      if (val === 'mes') {
+                        setFilterMonth(String(now.getMonth() + 1).padStart(2, '0'));
+                        setFilterYear(String(now.getFullYear()));
+                      } else if (val === 'ano') {
+                        setFilterYear(String(now.getFullYear()));
+                      } else if (val === 'dia') {
+                        setFilterDay(now.toLocaleDateString('pt-BR'));
+                      }
+                    }}
                     options={[ {value: 'dia', label: 'Dia Específico'}, {value: 'mes', label: 'Mês'}, {value: 'ano', label: 'Ano'} ]} 
                   />
                   
