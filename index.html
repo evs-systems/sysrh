@@ -3877,6 +3877,7 @@
 
         function EmployeesView({ theme, basePath, appUser, employees, companies, showToast, logAction, requestConfirm }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
+          const [isImportModalOpen, setIsImportModalOpen] = useState(false);
           const [editingId, setEditingId] = useState(null);
           const [activeSubTab, setActiveSubTab] = useState('ativos');
           
@@ -4128,6 +4129,111 @@
             });
           };
 
+          // ====== FUNÇÕES DE IMPORTAÇÃO E EXPORTAÇÃO ======
+          const handleExportCSV = () => {
+            const headers = ['Nome', 'CPF', 'RG', 'Email', 'Contato', 'Data Nascimento', 'Genero', 'Estado Civil', 'Cargo', 'Departamento', 'Empresa', 'CNPJ', 'Unidade', 'Setor', 'Salario Base', 'Tipo', 'Status', 'Data Admissao', 'CEP', 'Rua', 'Numero', 'Bairro', 'Estado', 'Banco', 'Agencia', 'Conta', 'Tipo Pix', 'Chave Pix'];
+            const rows = currentList.map(e => [
+              `"${e.name || ''}"`, `"${e.cpf || ''}"`, `"${e.rg || ''}"`, `"${e.email || ''}"`, `"${e.contact || ''}"`,
+              `"${e.birthDate || ''}"`, `"${e.gender || ''}"`, `"${e.isMarried || ''}"`, `"${e.role || ''}"`, `"${e.department || ''}"`,
+              `"${e.company || ''}"`, `"${e.cnpj || ''}"`, `"${e.unit || ''}"`, `"${e.workSector || ''}"`, `"${e.baseSalary || ''}"`,
+              `"${e.employeeType || ''}"`, `"${e.status || ''}"`, `"${e.startDate || ''}"`, `"${e.cep || ''}"`, `"${e.street || ''}"`,
+              `"${e.number || ''}"`, `"${e.neighborhood || ''}"`, `"${e.state || ''}"`, `"${e.bankName || ''}"`,
+              `"${e.agency || ''}"`, `"${e.account || ''}"`, `"${e.pixType || ''}"`, `"${e.pixKey || ''}"`
+            ]);
+            const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a'); 
+            link.href = URL.createObjectURL(blob); 
+            link.download = `colaboradores_${activeSubTab}.csv`; 
+            link.click();
+          };
+
+          const handleDownloadTemplate = () => {
+            const headers = ['Nome Completo', 'CPF', 'RG', 'Email', 'Contato', 'Data Nascimento', 'Genero', 'Estado Civil', 'Cargo', 'Departamento', 'Empresa (Igual Cadastrada)', 'Unidade', 'Setor', 'Salario Base', 'Tipo (Efetivo/Freelancer)', 'Data Admissao', 'CEP', 'Rua', 'Numero', 'Bairro', 'Estado', 'Banco', 'Agencia', 'Conta', 'Tipo Pix', 'Chave Pix'];
+            const sampleRow = ['João Silva', '123.456.789-00', '12.345.678-9', 'joao@email.com', '(11) 99999-9999', '01/01/1990', 'Masculino', 'Não', 'Vendedor', 'Vendas', 'Minha Empresa LTDA', 'Matriz', 'Comercial', '2500,00', 'Efetivo', '15/03/2026', '01001-000', 'Praça da Sé', '1', 'Sé', 'SP', 'Itaú', '0001', '12345-6', 'CPF', '12345678900'];
+            const csvContent = [headers.join(';'), sampleRow.map(v => `"${v}"`).join(';')].join('\n');
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a'); 
+            link.href = URL.createObjectURL(blob); 
+            link.download = `modelo_importacao_colaboradores.csv`; 
+            link.click();
+          };
+
+          const handleImportCSV = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              try {
+                const text = event.target.result;
+                const rows = text.split(/\r?\n/).map(row => row.split(';').map(cell => cell.replace(/^"|"$/g, '').trim()));
+                
+                if (rows.length <= 1) {
+                  showToast('O arquivo CSV está vazio ou é inválido.', 'error');
+                  return;
+                }
+
+                let importedCount = 0;
+                const promises = [];
+                showToast('Importando colaboradores, aguarde...', 'success');
+
+                for (let i = 1; i < rows.length; i++) {
+                  const row = rows[i];
+                  if (row.length < 5 || !row[0]) continue; // Pula linhas vazias
+
+                  const empData = { ...initialFormState, isVerifiedProfile: false, lastModifiedBy: appUser.username, createdAt: new Date().toISOString() };
+                  
+                  // Mapeamento das colunas (baseado no template)
+                  empData.name = row[0] || '';
+                  empData.cpf = formatCPFMask(row[1] || '');
+                  empData.rg = formatRGMask(row[2] || '');
+                  empData.email = row[3] || '';
+                  empData.contact = formatPhoneMask(row[4] || '');
+                  empData.birthDate = formatDateInput(row[5] || '');
+                  empData.gender = row[6] || 'Outro';
+                  empData.isMarried = row[7] || 'Não';
+                  empData.role = row[8] || '';
+                  empData.department = row[9] || '';
+                  empData.company = row[10] || '';
+                  
+                  // Busca o CNPJ correspondente à empresa digitada
+                  const comp = companies.find(c => c.name.toLowerCase() === (row[10] || '').toLowerCase());
+                  empData.cnpj = comp ? comp.cnpj : '';
+                  
+                  empData.unit = row[11] || '';
+                  empData.workSector = row[12] || '';
+                  empData.baseSalary = row[13] ? formatCurrencyInput(row[13]) : ''; 
+                  empData.employeeType = row[14] || 'Efetivo';
+                  empData.startDate = formatDateInput(row[15] || '');
+                  empData.cep = formatCEPMask(row[16] || '');
+                  empData.street = row[17] || '';
+                  empData.number = row[18] || '';
+                  empData.neighborhood = row[19] || '';
+                  empData.state = row[20] || '';
+                  empData.bankName = row[21] || '';
+                  empData.agency = row[22] || '';
+                  empData.account = row[23] || '';
+                  empData.pixType = row[24] || 'CPF';
+                  empData.pixKey = row[25] || '';
+                  
+                  promises.push(addDoc(collection(db, `${basePath}/employees`), empData));
+                  importedCount++;
+                }
+
+                await Promise.all(promises);
+                logAction('Importação', 'Colaboradores', `Importou ${importedCount} colaboradores via Planilha`);
+                showToast(`${importedCount} colaboradores importados com sucesso!`);
+                setIsImportModalOpen(false);
+              } catch (err) {
+                console.error(err);
+                showToast('Erro ao importar CSV. Verifique a formatação do arquivo.', 'error');
+              }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; 
+          };
+
           return (
             <div className="space-y-6 animate-in fade-in duration-500">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
@@ -4135,7 +4241,11 @@
                   <h2 className="text-3xl font-bold tracking-tight">Colaboradores</h2>
                   <p className="text-slate-500 mt-1">Gerencie a equipe e dados bancários.</p>
                 </div>
-                {canWrite && <Button theme={theme} icon={Plus} onClick={() => openModal()}>Novo Funcionário</Button>}
+                <div className="flex flex-wrap gap-3">
+                  <Button theme={theme} variant="secondary" icon={Download} onClick={handleExportCSV}>Exportar Planilha</Button>
+                  {canWrite && <Button theme={theme} variant="secondary" icon={FileText} onClick={() => setIsImportModalOpen(true)}>Importar</Button>}
+                  {canWrite && <Button theme={theme} icon={Plus} onClick={() => openModal()}>Novo Funcionário</Button>}
+                </div>
               </div>
 
               <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit mb-6 overflow-x-auto">
@@ -4285,6 +4395,38 @@
                   </div>
                 )}
               </Card>
+
+              {/* Modal de Importação */}
+              <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Importar Colaboradores via Planilha">
+                <div className="space-y-6">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">1. Baixe o Modelo</h3>
+                    <p className="text-sm text-slate-500 mb-4">Para garantir que os dados sejam importados corretamente, primeiro baixe e preencha a nossa planilha modelo.</p>
+                    <Button variant="secondary" theme={theme} icon={Download} onClick={handleDownloadTemplate}>Baixar Modelo CSV</Button>
+                  </div>
+                  
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">2. Envie o Arquivo Preenchido</h3>
+                    <p className="text-sm text-slate-500 mb-4">Após preencher os dados, salve o arquivo no Excel no formato <strong>CSV (separado por vírgulas)</strong> e envie-o clicando abaixo.</p>
+                    
+                    <div className="relative flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer group">
+                      <input 
+                        type="file" 
+                        accept=".csv"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                        onChange={handleImportCSV}
+                      />
+                      <div className="text-center flex flex-col items-center pointer-events-none">
+                        <FileText size={32} className={`text-slate-400 mb-2 group-hover:${theme.text} transition-colors`} />
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Clique aqui para enviar o CSV</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                     <Button variant="ghost" theme={theme} onClick={() => setIsImportModalOpen(false)}>Fechar</Button>
+                  </div>
+                </div>
+              </Modal>
 
               <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Editar Funcionário' : 'Novo Funcionário'}>
                 <form onSubmit={handleSave} className="space-y-6">
@@ -4460,17 +4602,16 @@
                               let val = formatDateInput(e.target.value);
                               let updates = { startDate: val };
                               
-                              // Cálculo Automático de Experiência ao completar a data
                               if (val.length === 10) {
                                 const [d, m, y] = val.split('/');
                                 const startDateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
                                 
                                 if (!isNaN(startDateObj.getTime())) {
                                   const date45 = new Date(startDateObj);
-                                  date45.setDate(date45.getDate() + 44); // Soma 44 dias (contando o dia de início como dia 1)
+                                  date45.setDate(date45.getDate() + 44); 
                                   
                                   const date90 = new Date(startDateObj);
-                                  date90.setDate(date90.getDate() + 89); // Soma 89 dias (contando o dia de início como dia 1)
+                                  date90.setDate(date90.getDate() + 89); 
                                   
                                   const fmt = (date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
                                   
@@ -4531,7 +4672,6 @@
                           )}
                         </div>
 
-                        {/* NOVO CAMPO: VALE ALIMENTAÇÃO */}
                         <div className="mt-4">
                           <Select 
                             label="Recebe Vale Alimentação?" theme={theme} required value={formData.foodVoucher || 'Não'} 
@@ -4550,7 +4690,6 @@
                           </div>
                         )}
 
-                        {/* NOVO CAMPO: VALE TRANSPORTE */}
                         <div className="mt-4">
                           <Select 
                             label="Recebe Vale Transporte?" theme={theme} required value={formData.transportVoucher || 'Não'} 
