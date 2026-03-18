@@ -3186,7 +3186,8 @@
         function ReportsView({ theme, employees, payments }) {
           const todayDate = new Date();
           
-          const [filterType, setFilterType] = useState('mes');
+          // Ajustado para iniciar sempre mostrando o dia atual
+          const [filterType, setFilterType] = useState('dia');
           const [filterDay, setFilterDay] = useState(todayDate.toLocaleDateString('pt-BR'));
           const [filterMonth, setFilterMonth] = useState(String(todayDate.getMonth() + 1).padStart(2, '0'));
           const [filterYear, setFilterYear] = useState(String(todayDate.getFullYear()));
