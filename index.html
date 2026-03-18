@@ -1547,6 +1547,25 @@
             return false;
           }).sort((a, b) => a._diffDays - b._diffDays);
 
+          // NOVO: Lógica para listar todos os estagiários ativos e calcular vencimento
+          const activeInterns = employees.filter(emp => emp.status !== 'Desligado' && emp.isInternship === 'Sim').map(emp => {
+            let diffDays = null;
+            if (emp.internshipEndDate) {
+              const endDate = parseBrDateToObj(emp.internshipEndDate);
+              if (endDate) {
+                diffDays = Math.ceil((endDate.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
+              }
+            }
+            return {
+              ...emp,
+              _diffDays: diffDays
+            };
+          }).sort((a, b) => {
+            if (a._diffDays === null) return 1;
+            if (b._diffDays === null) return -1;
+            return a._diffDays - b._diffDays;
+          });
+
           // Lógica para listar todos os funcionários atualmente em período de experiência
           const probationEmployees = [];
           activeEmployees.forEach(emp => {
@@ -1714,6 +1733,42 @@
                       );
                     })}
                     {disciplinary.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhuma solicitação registrada.</p>}
+                  </div>
+                </Card>
+
+                {/* NOVO: Acompanhamento de Estágio */}
+                <Card className="p-6 min-w-0">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Briefcase size={20} className="text-teal-500 flex-shrink-0" /> Estagiários
+                  </h3>
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                    {activeInterns.map(emp => {
+                      const isOverdue = emp._diffDays !== null && emp._diffDays < 0;
+                      const isToday = emp._diffDays === 0;
+                      const showTag = emp._diffDays !== null && emp._diffDays <= 7;
+                      const diasText = Math.abs(emp._diffDays) === 1 ? 'dia' : 'dias';
+
+                      return (
+                        <div key={`intern-${emp.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                          <div className="flex flex-col min-w-0 flex-1 mr-2">
+                            <span className="font-medium truncate">{emp.name}</span>
+                            <span className="text-[10px] text-slate-500 truncate">Término: {emp.internshipEndDate || 'N/A'}</span>
+                          </div>
+                          {emp._diffDays !== null && (
+                            showTag ? (
+                              <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400'}`}>
+                                {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Fim em ${emp._diffDays} ${diasText}`}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                                Em andamento
+                              </span>
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                    {activeInterns.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum estagiário ativo no momento.</p>}
                   </div>
                 </Card>
 
