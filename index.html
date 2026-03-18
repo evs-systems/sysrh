@@ -1547,7 +1547,7 @@
             return false;
           }).sort((a, b) => a._diffDays - b._diffDays);
 
-          // NOVO: Lógica para listar todos os estagiários ativos e calcular vencimento
+          // Lógica para listar todos os estagiários ativos e calcular vencimento
           const activeInterns = employees.filter(emp => emp.status !== 'Desligado' && emp.isInternship === 'Sim').map(emp => {
             let diffDays = null;
             if (emp.internshipEndDate) {
@@ -1564,6 +1564,31 @@
             if (a._diffDays === null) return 1;
             if (b._diffDays === null) return -1;
             return a._diffDays - b._diffDays;
+          });
+
+          // NOVO: Lógica para listar funcionários com empréstimos ativos
+          const activeLoansList = [];
+          activeEmployees.forEach(emp => {
+            if (emp.hasLoans === 'Sim' && emp.loans && emp.loans.length > 0) {
+              emp.loans.forEach((loan, idx) => {
+                activeLoansList.push({
+                  id: `${emp.id}-loan-${idx}`,
+                  name: emp.name,
+                  role: emp.role,
+                  loanMonth: loan.loanMonth,
+                  deadlineMonth: loan.deadlineMonth
+                });
+              });
+            }
+          });
+
+          activeLoansList.sort((a, b) => {
+            const parseMY = (my) => {
+              if (!my) return 0;
+              const [m, y] = my.split('/');
+              return new Date(y, m - 1).getTime();
+            };
+            return parseMY(a.deadlineMonth) - parseMY(b.deadlineMonth);
           });
 
           // Lógica para listar todos os funcionários atualmente em período de experiência
@@ -1736,7 +1761,7 @@
                   </div>
                 </Card>
 
-                {/* NOVO: Acompanhamento de Estágio */}
+                {/* Acompanhamento de Estágio */}
                 <Card className="p-6 min-w-0">
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                     <Briefcase size={20} className="text-teal-500 flex-shrink-0" /> Estagiários
@@ -1796,11 +1821,32 @@
                   </div>
                 </Card>
 
-                <Card className="p-6 min-w-0 xl:col-span-2">
+                {/* NOVO: Acompanhamento de Empréstimos Ativos (Sem Valores) */}
+                <Card className="p-6 min-w-0">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <DollarSign size={20} className="text-emerald-500 flex-shrink-0" /> Empréstimos Ativos
+                  </h3>
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                    {activeLoansList.map(loan => (
+                      <div key={loan.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                        <div className="flex flex-col min-w-0 flex-1 mr-2">
+                          <span className="font-medium truncate">{loan.name}</span>
+                          <span className="text-[10px] text-slate-500 truncate">Início: {loan.loanMonth || '-'} • Fim: {loan.deadlineMonth || '-'}</span>
+                        </div>
+                        <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                          Ativo
+                        </span>
+                      </div>
+                    ))}
+                    {activeLoansList.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum empréstimo ativo no momento.</p>}
+                  </div>
+                </Card>
+
+                <Card className="p-6 min-w-0 xl:col-span-3">
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                     <ShieldCheck size={20} className="text-indigo-500 flex-shrink-0" /> Fim de Experiência
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                     {probationEmployees.map(emp => {
                       const isToday = emp._nextMilestoneDiff === 0;
                       const showTag = emp._nextMilestoneDiff <= 7;
@@ -1831,7 +1877,7 @@
                         </div>
                       );
                     })}
-                    {probationEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-2">Nenhum colaborador em período de experiência.</p>}
+                    {probationEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-3">Nenhum colaborador em período de experiência.</p>}
                   </div>
                 </Card>
               </div>
