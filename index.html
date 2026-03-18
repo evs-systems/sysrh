@@ -1765,7 +1765,7 @@
             const y = dateObj.getFullYear();
             
             // Feriados Fixos (Nacionais + SP)
-            const fixed = ['1/1', '25/1', '21/4', '1/5', '7/9', '12/10', '2/11', '15/11', '20/11', '25/12'];
+            const fixed = ['1/1', '25/1', '21/4', '1/5', '9/7', '7/9', '12/10', '2/11', '15/11', '20/11', '25/12'];
             if (fixed.includes(`${d}/${m}`)) return true;
 
             // Feriados Móveis
@@ -1906,7 +1906,7 @@
           const units = [...new Set(activeEmployees.map(e => e.unit).filter(Boolean))].sort();
           const sectors = [...new Set(activeEmployees.map(e => e.workSector).filter(Boolean))].sort();
 
-          // Calcula os tipos de dias no mês
+          // Calcula os tipos de dias no mês com matemática UTC imutável
           const monthData = useMemo(() => {
             const y = parseInt(filterYear);
             const m = parseInt(filterMonth) - 1;
@@ -1917,9 +1917,9 @@
             let escala1Sats = 0;
             let escala2Sats = 0;
 
-            // Âncora matemática: 07/03/2026 foi um sábado da Escala 1
-            const anchorSat = new Date(2026, 2, 7); 
-            anchorSat.setHours(0,0,0,0);
+            // Âncora matemática segura usando UTC para evitar qualquer distorção de fuso horário
+            // 07/03/2026 foi um sábado garantido da Escala 1
+            const anchorSat = Date.UTC(2026, 2, 7); 
 
             for (let d = 1; d <= daysInMonth; d++) {
               const date = new Date(y, m, d);
@@ -1931,11 +1931,17 @@
                   baseMonToFri++;
                 } else if (dayOfWeek === 6) {
                   allSats++;
-                  const diffTime = date.getTime() - anchorSat.getTime();
-                  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                  const weeksDiff = Math.floor(diffDays / 7);
-                  if (Math.abs(weeksDiff) % 2 === 0) escala1Sats++;
-                  else escala2Sats++;
+                  
+                  // Usa o UTC para contar a exata diferença de dias matemáticos
+                  const currentDateUTC = Date.UTC(y, m, d);
+                  const diffDays = Math.round((currentDateUTC - anchorSat) / 86400000);
+                  
+                  // Se a diferença de dias for um múltiplo exato de 14 (0, 14, -14, 28...), é Escala 1
+                  if (diffDays % 14 === 0) {
+                    escala1Sats++;
+                  } else {
+                    escala2Sats++;
+                  }
                 }
               }
             }
@@ -1958,8 +1964,8 @@
               let empBusinessDays = monthData.baseMonToFri;
               if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
               else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') empBusinessDays += monthData.escala1Sats;
-                  else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') empBusinessDays += monthData.escala2Sats;
+                  if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
               }
 
               let dailyTotal = (e.transportCards || []).reduce((acc, c) => acc + (Number(c.valuePerDay) || 0), 0);
@@ -2027,8 +2033,8 @@
               let empBusinessDays = monthData.baseMonToFri;
               if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
               else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') empBusinessDays += monthData.escala1Sats;
-                  else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') empBusinessDays += monthData.escala2Sats;
+                  if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
               }
 
               let dailyTotal = Number(e.fuelAllowanceValue) || 0;
@@ -2064,8 +2070,8 @@
               let empBusinessDays = monthData.baseMonToFri;
               if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
               else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam === 'Escala 1 (Jeniffer)') empBusinessDays += monthData.escala1Sats;
-                  else if (e.saturdayShiftTeam === 'Escala 2 (Thalia)') empBusinessDays += monthData.escala2Sats;
+                  if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
               }
 
               let dailyTotal = Number(e.foodVoucherValue) || 0;
@@ -2627,7 +2633,7 @@
                             </td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
-                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShift === 'Sábados alternados' && emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
                                </div>
                                <div className="flex flex-col gap-1">
                                  {emp._cardDetails ? emp._cardDetails.split(' | ').map((c, i) => <span key={i} className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded w-fit border border-slate-200 dark:border-slate-700">{c}</span>) : <span className="text-xs text-slate-400">Sem cartões</span>}
@@ -2718,7 +2724,7 @@
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
-                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShift === 'Sábados alternados' && emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
                                </div>
                                <div className="font-bold text-slate-700 dark:text-slate-300 mt-1.5 text-xs">Valor Diário: {formatCurrency(emp._dailyTotal)}</div>
                             </td>
@@ -2833,7 +2839,7 @@
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
-                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShift === 'Sábados alternados' && emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
                                </div>
                                <div className="font-bold text-slate-700 dark:text-slate-300 mt-1.5 text-xs">Valor Diário: {formatCurrency(emp._dailyTotal)}</div>
                             </td>
