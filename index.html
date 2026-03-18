@@ -4710,7 +4710,7 @@
 
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Prazos e Exames Médicos</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           <Input 
                             label="Data de Início/Admissão" 
                             placeholder="DD/MM/AAAA" 
@@ -4740,6 +4740,14 @@
                               }
                               setFormData({...formData, ...updates});
                             }} 
+                          />
+                          <Input 
+                            label="Tempo de Registro" 
+                            theme={theme} 
+                            value={calculateTenure(formData.startDate)} 
+                            readOnly 
+                            className="opacity-70 pointer-events-none bg-slate-100 dark:bg-slate-800 font-medium" 
+                            title="Calculado automaticamente" 
                           />
                           <Input label="Data Exame Admissional" placeholder="DD/MM/AAAA" theme={theme} value={formData.admissionExamDate} onChange={e => setFormData({...formData, admissionExamDate: formatDateInput(e.target.value)})} />
                           <Input label="Fim de Experiência (45 dias)" placeholder="DD/MM/AAAA" theme={theme} value={formData.probation45} onChange={e => setFormData({...formData, probation45: formatDateInput(e.target.value)})} />
