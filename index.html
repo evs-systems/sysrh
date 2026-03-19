@@ -53,6 +53,17 @@
     }
     </script>
 
+    <!-- Filtro para silenciar o aviso de 500KB do Babel no console -->
+    <script>
+        const originalConsoleError = console.error;
+        console.error = function(...args) {
+            if (typeof args[0] === 'string' && args[0].includes('exceeds the max of 500KB')) {
+                return; // Ignora o aviso inofensivo do Babel
+            }
+            originalConsoleError.apply(console, args);
+        };
+    </script>
+
     <!-- Babel Standalone para compilar o React (JSX) no navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
@@ -151,7 +162,12 @@
             
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register(URL.createObjectURL(swBlob))
-                    .catch(err => console.log('Aviso do PWA:', err));
+                    .catch(err => {
+                        // Silencia o erro no ambiente de testes (que usa blob URLs)
+                        if (!window.location.href.startsWith('blob:')) {
+                            console.log('Aviso do PWA:', err);
+                        }
+                    });
             });
         }
     </script>
@@ -163,7 +179,8 @@
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
+    <!-- Adicionado data-compact="true" para silenciar o aviso de 500KB do Babel -->
+    <script type="text/babel" data-type="module" data-compact="true">
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
@@ -838,6 +855,7 @@
             { id: 'dashboard', icon: TrendingUp, label: 'Dashboard', req: null },
             { id: 'calendar', icon: CalendarIcon, label: 'Agenda', req: 'calendar' },
             { id: 'reports', icon: BarChart2, label: 'Relatórios', req: 'reports' },
+            { id: 'vacations', icon: Sun, label: 'Férias', req: 'employees' },
             { id: 'benefits', icon: Gift, label: 'Benefícios', req: 'benefits' },
             { id: 'companies', icon: Building, label: 'Empresas', req: 'companies' },
             { id: 'employees', icon: Users, label: 'Colaboradores', req: 'employees' },
@@ -1035,6 +1053,7 @@
                     {activeTab === 'dashboard' && <DashboardView theme={theme} employees={employees} payments={payments} disciplinary={disciplinary} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
+                    {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} />}
                     {activeTab === 'benefits' && <BenefitsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} />}
                     {activeTab === 'companies' && <CompaniesView theme={theme} basePath={basePath} appUser={appUser} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'employees' && <EmployeesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
@@ -1566,7 +1585,7 @@
             return a._diffDays - b._diffDays;
           });
 
-          // NOVO: Lógica para listar funcionários com empréstimos ativos
+          // Lógica para listar funcionários com empréstimos ativos
           const activeLoansList = [];
           activeEmployees.forEach(emp => {
             if (emp.hasLoans === 'Sim' && emp.loans && emp.loans.length > 0) {
@@ -1589,6 +1608,55 @@
               return new Date(y, m - 1).getTime();
             };
             return parseMY(a.deadlineMonth) - parseMY(b.deadlineMonth);
+          });
+
+          // NOVO: Lógica para listar férias (Atuais e Próximos 30 dias)
+          const vacationsList = [];
+          activeEmployees.forEach(emp => {
+            if (emp.vacations) {
+              Object.values(emp.vacations).forEach(vac => {
+                if (vac.confirmed && vac.startDate && vac.endDate) {
+                  const sDate = parseBrDateToObj(vac.startDate);
+                  const eDate = parseBrDateToObj(vac.endDate);
+                  if (sDate && eDate) {
+                    const diffStart = Math.ceil((sDate.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
+                    const diffEnd = Math.ceil((eDate.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
+
+                    if (diffStart <= 0 && diffEnd >= 0) {
+                      // Atualmente de férias
+                      vacationsList.push({
+                        id: `${emp.id}-vac-${vac.startDate}`,
+                        name: emp.name,
+                        role: emp.role,
+                        startDate: vac.startDate,
+                        endDate: vac.endDate,
+                        type: 'current'
+                      });
+                    } else if (diffStart > 0 && diffStart <= 30) {
+                      // Férias nos próximos 30 dias
+                      vacationsList.push({
+                        id: `${emp.id}-vac-${vac.startDate}`,
+                        name: emp.name,
+                        role: emp.role,
+                        startDate: vac.startDate,
+                        endDate: vac.endDate,
+                        type: 'upcoming',
+                        daysUntil: diffStart
+                      });
+                    }
+                  }
+                }
+              });
+            }
+          });
+
+          // Ordena férias: Atuais primeiro, depois as que estão mais próximas de acontecer
+          vacationsList.sort((a, b) => {
+            if (a.type === 'current' && b.type === 'upcoming') return -1;
+            if (a.type === 'upcoming' && b.type === 'current') return 1;
+            const dateA = parseBrDateToObj(a.startDate).getTime();
+            const dateB = parseBrDateToObj(b.startDate).getTime();
+            return dateA - dateB;
           });
 
           // Lógica para listar todos os funcionários atualmente em período de experiência
@@ -1821,7 +1889,7 @@
                   </div>
                 </Card>
 
-                {/* NOVO: Acompanhamento de Empréstimos Ativos (Sem Valores) */}
+                {/* Acompanhamento de Empréstimos Ativos */}
                 <Card className="p-6 min-w-0">
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                     <DollarSign size={20} className="text-emerald-500 flex-shrink-0" /> Empréstimos Ativos
@@ -1842,11 +1910,36 @@
                   </div>
                 </Card>
 
-                <Card className="p-6 min-w-0 xl:col-span-3">
+                {/* NOVO: Acompanhamento de Férias */}
+                <Card className="p-6 min-w-0">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Sun size={20} className="text-yellow-500 flex-shrink-0" /> Férias
+                  </h3>
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                    {vacationsList.map(vac => (
+                      <div key={vac.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                        <div className="flex flex-col min-w-0 flex-1 mr-2">
+                          <span className="font-medium truncate">{vac.name}</span>
+                          {vac.type === 'current' ? (
+                            <span className="text-[10px] text-slate-500 truncate">Início: {vac.startDate} • Término: {vac.endDate}</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 truncate">Início: {vac.startDate}</span>
+                          )}
+                        </div>
+                        <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${vac.type === 'current' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'}`}>
+                          {vac.type === 'current' ? 'Em Férias' : `Em ${vac.daysUntil} dia(s)`}
+                        </span>
+                      </div>
+                    ))}
+                    {vacationsList.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum colaborador em férias ou agendado para os próximos 30 dias.</p>}
+                  </div>
+                </Card>
+
+                <Card className="p-6 min-w-0 xl:col-span-2">
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                     <ShieldCheck size={20} className="text-indigo-500 flex-shrink-0" /> Fim de Experiência
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                     {probationEmployees.map(emp => {
                       const isToday = emp._nextMilestoneDiff === 0;
                       const showTag = emp._nextMilestoneDiff <= 7;
@@ -1877,7 +1970,7 @@
                         </div>
                       );
                     })}
-                    {probationEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-3">Nenhum colaborador em período de experiência.</p>}
+                    {probationEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-2">Nenhum colaborador em período de experiência.</p>}
                   </div>
                 </Card>
               </div>
@@ -1912,8 +2005,9 @@
                 return temp.getDate() === d && (temp.getMonth() + 1) === m;
             };
             
-            // Carnaval (-47 dias), Sexta Santa (-2 dias), Corpus Christi (+60 dias)
-            if (checkMobile(-47) || checkMobile(-2) || checkMobile(60)) return true;
+            // Sexta Santa (-2 dias), Corpus Christi (+60 dias)
+            // (Carnaval removido, pois é ponto facultativo em SP)
+            if (checkMobile(-2) || checkMobile(60)) return true;
 
             return false;
         };
@@ -1928,6 +2022,7 @@
           const [filterStatus, setFilterStatus] = useState('');
           
           const [visibleCount, setVisibleCount] = useState(50);
+          const [isPrinting, setIsPrinting] = useState(false);
 
           const canWrite = appUser?.permissions?.benefits?.write || appUser?.permissions?.employees?.write || appUser?.sector === 'Administração';
 
@@ -1938,9 +2033,9 @@
           
           const [filterMonth, setFilterMonth] = useState(currentMonthStr);
           const [filterYear, setFilterYear] = useState(currentYearStr);
-          const monthKey = `${filterYear}-${filterMonth}`; // Ex: "2026-03"
+          const monthKey = `${filterYear}-${filterMonth}`;
 
-          // Repõe a contagem visível sempre que o utilizador muda de aba ou faz uma pesquisa
+          // Repõe a contagem visível sempre que o utilizador muda de aba ou filtros
           useEffect(() => {
             setVisibleCount(50);
           }, [activeSubTab, searchTerm, filterCompany, filterRole, filterUnit, filterSector, filterStatus, filterMonth, filterYear]);
@@ -1997,8 +2092,6 @@
           const [foodRewardBulkModalOpen, setFoodRewardBulkModalOpen] = useState(false);
           const [foodRewardBulkValue, setFoodRewardBulkValue] = useState('');
 
-          const [isPrinting, setIsPrinting] = useState(false);
-
           const safeEmployees = Array.isArray(employees) ? employees : [];
           const activeEmployees = safeEmployees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
@@ -2042,7 +2135,7 @@
           const units = [...new Set(activeEmployees.map(e => e.unit).filter(Boolean))].sort();
           const sectors = [...new Set(activeEmployees.map(e => e.workSector).filter(Boolean))].sort();
 
-          // Calcula os tipos de dias no mês com matemática UTC imutável
+          // Calcula os tipos de dias no mês
           const monthData = useMemo(() => {
             const y = parseInt(filterYear);
             const m = parseInt(filterMonth) - 1;
@@ -2053,9 +2146,9 @@
             let escala1Sats = 0;
             let escala2Sats = 0;
 
-            // Âncora matemática segura usando UTC para evitar qualquer distorção de fuso horário
-            // 07/03/2026 foi um sábado garantido da Escala 1
-            const anchorSat = Date.UTC(2026, 2, 7); 
+            // Âncora matemática: 07/03/2026 foi um sábado da Escala 1
+            const anchorSat = new Date(2026, 2, 7); 
+            anchorSat.setHours(0,0,0,0);
 
             for (let d = 1; d <= daysInMonth; d++) {
               const date = new Date(y, m, d);
@@ -2067,22 +2160,87 @@
                   baseMonToFri++;
                 } else if (dayOfWeek === 6) {
                   allSats++;
-                  
-                  // Usa o UTC para contar a exata diferença de dias matemáticos
-                  const currentDateUTC = Date.UTC(y, m, d);
-                  const diffDays = Math.round((currentDateUTC - anchorSat) / 86400000);
-                  
-                  // Se a diferença de dias for um múltiplo exato de 14 (0, 14, -14, 28...), é Escala 1
-                  if (diffDays % 14 === 0) {
-                    escala1Sats++;
-                  } else {
-                    escala2Sats++;
-                  }
+                  const diffTime = date.getTime() - anchorSat.getTime();
+                  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                  const weeksDiff = Math.floor(diffDays / 7);
+                  if (Math.abs(weeksDiff) % 2 === 0) escala1Sats++;
+                  else escala2Sats++;
                 }
               }
             }
             return { baseMonToFri, allSats, escala1Sats, escala2Sats };
           }, [filterYear, filterMonth]);
+
+          // NOVO: Função para calcular os dias de férias no mês selecionado
+          const getVacationData = (emp, yStr, mStr) => {
+            let isFullMonthVacation = false;
+            let isPartialVacation = false;
+            let vacDiscount = 0;
+            let tagText = '';
+
+            const activeVacs = Object.values(emp.vacations || {}).filter(v => v.confirmed && v.startDate && v.endDate);
+            if (activeVacs.length === 0) return { isFullMonthVacation, isPartialVacation, vacDiscount, tagText };
+
+            const mYear = parseInt(yStr);
+            const mMonth = parseInt(mStr) - 1;
+            const daysInMonth = new Date(mYear, mMonth + 1, 0).getDate();
+            let totalWorkingDaysThisMonth = 0;
+            let vacationWorkingDaysThisMonth = 0;
+
+            const anchorSat = new Date(2026, 2, 7);
+            anchorSat.setHours(0,0,0,0);
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const date = new Date(mYear, mMonth, d);
+                date.setHours(0,0,0,0);
+                const time = date.getTime();
+
+                let isWorkingDay = false;
+                if (!isHoliday(date)) {
+                    const dayOfWeek = date.getDay();
+                    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                        isWorkingDay = true;
+                    } else if (dayOfWeek === 6) {
+                        if (emp.saturdayShift === 'Todos os sábados') isWorkingDay = true;
+                        else if (emp.saturdayShift === 'Sábados alternados') {
+                            const diffTime = time - anchorSat.getTime();
+                            const diffDays = Math.round(diffTime / 86400000);
+                            const weeksDiff = Math.floor(diffDays / 7);
+                            if (Math.abs(weeksDiff) % 2 === 0 && emp.saturdayShiftTeam?.includes('Escala 1')) isWorkingDay = true;
+                            else if (Math.abs(weeksDiff) % 2 !== 0 && emp.saturdayShiftTeam?.includes('Escala 2')) isWorkingDay = true;
+                        }
+                    }
+                }
+
+                if (isWorkingDay) {
+                    totalWorkingDaysThisMonth++;
+                    const inVacation = activeVacs.some(v => {
+                        const sParts = v.startDate.split('/');
+                        const eParts = v.endDate.split('/');
+                        if (sParts.length !== 3 || eParts.length !== 3) return false;
+                        const s = new Date(sParts[2], sParts[1]-1, sParts[0]).getTime();
+                        const eD = new Date(eParts[2], eParts[1]-1, eParts[0]).getTime();
+                        return time >= s && time <= eD;
+                    });
+                    if (inVacation) {
+                        vacationWorkingDaysThisMonth++;
+                    }
+                }
+            }
+
+            if (totalWorkingDaysThisMonth > 0) {
+                if (vacationWorkingDaysThisMonth === totalWorkingDaysThisMonth) {
+                    isFullMonthVacation = true;
+                    tagText = 'Férias (Mês Completo)';
+                } else if (vacationWorkingDaysThisMonth > 0) {
+                    isPartialVacation = true;
+                    vacDiscount = vacationWorkingDaysThisMonth;
+                    tagText = `Férias Parcial (-${vacDiscount} dias úteis)`;
+                }
+            }
+
+            return { isFullMonthVacation, isPartialVacation, vacDiscount, tagText };
+          };
 
           // Aplicação dos Filtros
           let filteredEmps = activeEmployees;
@@ -2097,12 +2255,16 @@
 
           if (activeSubTab === 'transport') {
             currentList = filteredEmps.filter(e => e.transportVoucher === 'Sim').map(e => {
+              const vacData = getVacationData(e, filterYear, filterMonth);
               let empBusinessDays = monthData.baseMonToFri;
               if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
               else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
-                  else if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
+                  if (e.saturdayShiftTeam?.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam?.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
               }
+
+              if (vacData.isFullMonthVacation) empBusinessDays = 0;
+              else if (vacData.isPartialVacation) empBusinessDays -= vacData.vacDiscount;
 
               let dailyTotal = (e.transportCards || []).reduce((acc, c) => acc + (Number(c.valuePerDay) || 0), 0);
               const empAbsences = Number(localAbsences[e.id]) || 0;
@@ -2155,23 +2317,30 @@
                 _isPartial: isPartial,
                 _paidAmount: paidAmount,
                 _remainingAmount: remainingAmount,
-                _paymentDetails: monthPaymentInfo
+                _paymentDetails: monthPaymentInfo,
+                _vacData: vacData
               };
             });
           } else if (activeSubTab === 'health') {
             currentList = filteredEmps.filter(e => e.healthInsurance === 'Sim').map(e => {
-              const val = (Number(e.healthInsuranceValue) || 0) + (e.hasDependents === 'Sim' ? (Number(e.dependentsValue) || 0) : 0);
+              const vacData = getVacationData(e, filterYear, filterMonth);
+              let val = (Number(e.healthInsuranceValue) || 0) + (e.hasDependents === 'Sim' ? (Number(e.dependentsValue) || 0) : 0);
+              if (vacData.isFullMonthVacation) val = 0;
               totalValue += val;
-              return { ...e, _benefitValue: val, _details: e.hasDependents === 'Sim' ? `${e.dependentsCount || 0} dependente(s)` : 'Sem dependentes' };
+              return { ...e, _benefitValue: val, _details: e.hasDependents === 'Sim' ? `${e.dependentsCount || 0} dependente(s)` : 'Sem dependentes', _vacData: vacData };
             });
           } else if (activeSubTab === 'fuel') {
             currentList = filteredEmps.filter(e => e.fuelAllowance === 'Sim').map(e => {
+              const vacData = getVacationData(e, filterYear, filterMonth);
               let empBusinessDays = monthData.baseMonToFri;
               if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
               else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
-                  else if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
+                  if (e.saturdayShiftTeam?.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam?.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
               }
+
+              if (vacData.isFullMonthVacation) empBusinessDays = 0;
+              else if (vacData.isPartialVacation) empBusinessDays -= vacData.vacDiscount;
 
               let dailyTotal = Number(e.fuelAllowanceValue) || 0;
               const empAbsences = Number(localFuelAbsences[e.id]) || 0;
@@ -2198,17 +2367,22 @@
                 _empAbsences: empAbsences, 
                 _empBusinessDays: empBusinessDays,
                 _isPaid: isPaid,
-                _paymentDetails: monthPaymentInfo
+                _paymentDetails: monthPaymentInfo,
+                _vacData: vacData
               };
             });
           } else if (activeSubTab === 'food') {
             currentList = filteredEmps.filter(e => e.foodVoucher === 'Sim').map(e => {
+              const vacData = getVacationData(e, filterYear, filterMonth);
               let empBusinessDays = monthData.baseMonToFri;
               if (e.saturdayShift === 'Todos os sábados') empBusinessDays += monthData.allSats;
               else if (e.saturdayShift === 'Sábados alternados') {
-                  if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
-                  else if (e.saturdayShiftTeam && e.saturdayShiftTeam.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
+                  if (e.saturdayShiftTeam?.includes('Escala 1')) empBusinessDays += monthData.escala1Sats;
+                  else if (e.saturdayShiftTeam?.includes('Escala 2')) empBusinessDays += monthData.escala2Sats;
               }
+
+              if (vacData.isFullMonthVacation) empBusinessDays = 0;
+              else if (vacData.isPartialVacation) empBusinessDays -= vacData.vacDiscount;
 
               let dailyTotal = Number(e.foodVoucherValue) || 0;
               const empAbsences = Number(localFoodAbsences[e.id]) || 0;
@@ -2244,7 +2418,8 @@
                 _empAbsences: empAbsences, 
                 _empBusinessDays: empBusinessDays,
                 _isPaid: isPaid,
-                _paymentDetails: monthPaymentInfo
+                _paymentDetails: monthPaymentInfo,
+                _vacData: vacData
               };
             });
           }
@@ -2761,15 +2936,22 @@
                         {displayedList.map(emp => (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
-                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2 truncate">
                                 {emp.name || 'Desconhecido'}
                                 {emp.transportVerified?.[monthKey] === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">Pendente</span>}
                               </div>
+                              {emp._vacData?.tagText && (
+                                <div className="mt-1 mb-1">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase inline-block ${emp._vacData.isFullMonthVacation ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 'bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'}`}>
+                                    {emp._vacData.tagText}
+                                  </span>
+                                </div>
+                              )}
                               <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
                             </td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
-                                 Sábado: {emp.saturdayShift} {emp.saturdayShift === 'Sábados alternados' && emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
                                </div>
                                <div className="flex flex-col gap-1">
                                  {emp._cardDetails ? emp._cardDetails.split(' | ').map((c, i) => <span key={i} className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded w-fit border border-slate-200 dark:border-slate-700">{c}</span>) : <span className="text-xs text-slate-400">Sem cartões</span>}
@@ -2780,7 +2962,7 @@
                               <span className="font-bold text-lg text-slate-700 dark:text-slate-200">{emp._empBusinessDays}</span>
                             </td>
                             <td className="p-4">
-                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid || emp._isPartial}
+                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid || emp._isPartial || emp._vacData?.isFullMonthVacation}
                                       className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
                                       value={localAbsences[emp.id] !== undefined ? localAbsences[emp.id] : ''}
                                       onChange={e => {
@@ -2789,7 +2971,7 @@
                                         setLocalAbsences({...localAbsences, [emp.id]: val});
                                       }}
                                       onBlur={() => handleAbsenceBlur(emp.id, emp.name)} placeholder="0"
-                                      title={(emp._isPaid || emp._isPartial) ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
+                                      title={emp._vacData?.isFullMonthVacation ? "Mês completo de férias" : (emp._isPaid || emp._isPartial) ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
                                />
                             </td>
                             <td className="p-4 text-right">
@@ -2851,16 +3033,23 @@
                         {displayedList.map(emp => (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
-                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2 truncate">
                                 {emp.name || 'Desconhecido'}
                                 {emp.foodVerified?.[monthKey] === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
                               </div>
+                              {emp._vacData?.tagText && (
+                                <div className="mt-1 mb-1">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase inline-block ${emp._vacData.isFullMonthVacation ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 'bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'}`}>
+                                    {emp._vacData.tagText}
+                                  </span>
+                                </div>
+                              )}
                               <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
                             </td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
-                                 Sábado: {emp.saturdayShift} {emp.saturdayShift === 'Sábados alternados' && emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
                                </div>
                                <div className="font-bold text-slate-700 dark:text-slate-300 mt-1.5 text-xs">Valor Diário: {formatCurrency(emp._dailyTotal)}</div>
                             </td>
@@ -2868,7 +3057,7 @@
                               <span className="font-bold text-lg text-slate-700 dark:text-slate-200">{emp._empBusinessDays}</span>
                             </td>
                             <td className="p-4">
-                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid}
+                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid || emp._vacData?.isFullMonthVacation}
                                       className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
                                       value={localFoodAbsences[emp.id] !== undefined ? localFoodAbsences[emp.id] : ''}
                                       onChange={e => {
@@ -2877,7 +3066,7 @@
                                         setLocalFoodAbsences({...localFoodAbsences, [emp.id]: val});
                                       }}
                                       onBlur={() => handleFoodAbsenceBlur(emp.id, emp.name)} placeholder="0"
-                                      title={emp._isPaid ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
+                                      title={emp._vacData?.isFullMonthVacation ? "Mês completo de férias" : emp._isPaid ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
                                />
                             </td>
                             <td className="p-4 text-center">
@@ -2885,9 +3074,9 @@
                                   <label className="flex items-center gap-1.5 cursor-pointer">
                                      <input 
                                          type="checkbox"
-                                         className={`rounded border-slate-300 text-${theme.main}-600 focus:ring-${theme.main}-500`}
+                                         className={`rounded border-slate-300 text-${theme.main}-600 focus:ring-${theme.main}-500 disabled:opacity-50 disabled:cursor-not-allowed`}
                                          checked={localFoodRewardEnabled[emp.id] || false}
-                                         disabled={!canWrite || emp._isPaid}
+                                         disabled={!canWrite || emp._isPaid || emp._vacData?.isFullMonthVacation}
                                          onChange={(e) => {
                                              const val = e.target.checked;
                                              setLocalFoodRewardEnabled(prev => ({...prev, [emp.id]: val}));
@@ -2899,7 +3088,7 @@
                                   {localFoodRewardEnabled[emp.id] && (
                                      <input 
                                          type="text"
-                                         disabled={!canWrite || emp._isPaid}
+                                         disabled={!canWrite || emp._isPaid || emp._vacData?.isFullMonthVacation}
                                          className={`w-24 px-2 py-1 text-center text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
                                          placeholder="R$ 0,00"
                                          value={localFoodRewardValue[emp.id] ? displayCurrencyMask(localFoodRewardValue[emp.id]) : ''}
@@ -2966,16 +3155,23 @@
                         {displayedList.map(emp => (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
-                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2 truncate">
                                 {emp.name || 'Desconhecido'}
                                 {emp.fuelVerified?.[monthKey] === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência">Pendente</span>}
                               </div>
+                              {emp._vacData?.tagText && (
+                                <div className="mt-1 mb-1">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase inline-block ${emp._vacData.isFullMonthVacation ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 'bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'}`}>
+                                    {emp._vacData.tagText}
+                                  </span>
+                                </div>
+                              )}
                               <div className="text-xs text-slate-500">{emp.role || '-'} • {emp.unit || '-'}</div>
                             </td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-wide">
-                                 Sábado: {emp.saturdayShift} {emp.saturdayShift === 'Sábados alternados' && emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
+                                 Sábado: {emp.saturdayShift} {emp.saturdayShiftTeam ? `(${emp.saturdayShiftTeam})` : ''}
                                </div>
                                <div className="font-bold text-slate-700 dark:text-slate-300 mt-1.5 text-xs">Valor Diário: {formatCurrency(emp._dailyTotal)}</div>
                             </td>
@@ -2983,7 +3179,7 @@
                               <span className="font-bold text-lg text-slate-700 dark:text-slate-200">{emp._empBusinessDays}</span>
                             </td>
                             <td className="p-4">
-                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid}
+                               <input type="number" min="0" max={emp._empBusinessDays} disabled={!canWrite || emp._isPaid || emp._vacData?.isFullMonthVacation}
                                       className={`w-full px-3 py-1.5 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 disabled:opacity-50 disabled:bg-slate-100 disabled:dark:bg-slate-800`}
                                       value={localFuelAbsences[emp.id] !== undefined ? localFuelAbsences[emp.id] : ''}
                                       onChange={e => {
@@ -2992,7 +3188,7 @@
                                         setLocalFuelAbsences({...localFuelAbsences, [emp.id]: val});
                                       }}
                                       onBlur={() => handleFuelAbsenceBlur(emp.id, emp.name)} placeholder="0"
-                                      title={emp._isPaid ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
+                                      title={emp._vacData?.isFullMonthVacation ? "Mês completo de férias" : emp._isPaid ? "Faltas bloqueadas pois já existe pagamento" : "Dias de falta neste mês"}
                                />
                             </td>
                             <td className="p-4 text-right">
@@ -3044,10 +3240,17 @@
                         {displayedList.map(emp => (
                           <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-4">
-                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                              <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2 truncate">
                                 {emp.name || 'Desconhecido'}
                                 {emp.isVerifiedProfile === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase">Pendente</span>}
                               </div>
+                              {emp._vacData?.tagText && (
+                                <div className="mt-1 mb-1">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase inline-block ${emp._vacData.isFullMonthVacation ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 'bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'}`}>
+                                    {emp._vacData.tagText}
+                                  </span>
+                                </div>
+                              )}
                             </td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{formatCPF(emp.cpf) || '-'}</td>
                             <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{emp.role || '-'}</td>
@@ -3561,6 +3764,498 @@
                     </table>
                   )}
                 </div>
+              </Card>
+            </div>
+          );
+        }
+
+        function VacationsView({ theme, basePath, appUser, employees, showToast, logAction, db }) {
+          const [activeSubTab, setActiveSubTab] = useState('atuais');
+          const [searchTerm, setSearchTerm] = useState('');
+          const [filterDepartment, setFilterDepartment] = useState('');
+          const [filterUnit, setFilterUnit] = useState('');
+          const [filterSector, setFilterSector] = useState('');
+          const [filterStatus, setFilterStatus] = useState('');
+          
+          const today = new Date();
+          const currentMonthStr = String(today.getMonth() + 1).padStart(2, '0');
+          const currentYearStr = String(today.getFullYear());
+          
+          const [filterMonth, setFilterMonth] = useState(currentMonthStr);
+          const [filterYear, setFilterYear] = useState(currentYearStr);
+
+          const [visibleCount, setVisibleCount] = useState(50);
+          const [localEdits, setLocalEdits] = useState({});
+
+          const canWrite = appUser?.permissions?.vacations?.write || appUser?.sector === 'Administração';
+
+          useEffect(() => {
+            setVisibleCount(50);
+          }, [activeSubTab, searchTerm, filterDepartment, filterUnit, filterSector, filterStatus, filterMonth, filterYear]);
+
+          const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
+
+          const deptsList = [...new Set(activeEmployees.map(e => e.department).filter(Boolean))].sort();
+          const unitsList = [...new Set(activeEmployees.map(e => e.unit).filter(Boolean))].sort();
+          const sectorsList = [...new Set(activeEmployees.map(e => e.workSector).filter(Boolean))].sort();
+
+          const monthOptions = [
+            { value: 'all', label: 'Todos os Meses' },
+            { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
+            { value: '04', label: 'Abril' }, { value: '05', label: 'Maio' }, { value: '06', label: 'Junho' },
+            { value: '07', label: 'Julho' }, { value: '08', label: 'Agosto' }, { value: '09', label: 'Setembro' },
+            { value: '10', label: 'Outubro' }, { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' }
+          ];
+
+          const yearOptions = [
+            { value: 'all', label: 'Todos os Anos' },
+            { value: String(today.getFullYear() - 1), label: String(today.getFullYear() - 1) },
+            { value: currentYearStr, label: currentYearStr },
+            { value: String(today.getFullYear() + 1), label: String(today.getFullYear() + 1) },
+            { value: String(today.getFullYear() + 2), label: String(today.getFullYear() + 2) }
+          ];
+
+          const parseDate = (dStr) => {
+            if (!dStr || dStr.length < 10) return null;
+            const [d, m, y] = dStr.split('/');
+            return new Date(y, m - 1, d);
+          };
+
+          const allCycles = [];
+          activeEmployees.forEach(emp => {
+            if (!emp.startDate) return;
+            const startD = parseDate(emp.startDate);
+            if (!startD || isNaN(startD.getTime())) return;
+
+            let currentYear = startD.getFullYear();
+            const currentTodayYear = today.getFullYear();
+            
+            while (currentYear <= currentTodayYear + 1) {
+              const startAq = new Date(currentYear, startD.getMonth(), startD.getDate());
+              const endAq = new Date(currentYear + 1, startD.getMonth(), startD.getDate() - 1);
+              const canTake = new Date(currentYear + 1, startD.getMonth() + 1, startD.getDate() - 1);
+              const limit = new Date(currentYear + 2, startD.getMonth() + 1, startD.getDate() - 1);
+
+              const cycleId = `${currentYear}-${currentYear+1}`;
+              const dbData = emp.vacations?.[cycleId] || {};
+
+              allCycles.push({
+                emp,
+                cycleId,
+                startAqStr: startAq.toLocaleDateString('pt-BR'),
+                endAqStr: endAq.toLocaleDateString('pt-BR'),
+                canTakeStr: canTake.toLocaleDateString('pt-BR'),
+                limitStr: limit.toLocaleDateString('pt-BR'),
+                dbData
+              });
+              currentYear++;
+            }
+          });
+
+          const handleLocalChange = (uniqueId, field, value) => {
+            setLocalEdits(prev => ({
+              ...prev,
+              [uniqueId]: {
+                ...(prev[uniqueId] || {}),
+                [field]: value
+              }
+            }));
+          };
+
+          const getVal = (uniqueId, cycle, field, def = '') => {
+            return localEdits[uniqueId]?.[field] !== undefined ? localEdits[uniqueId][field] : (cycle.dbData[field] || def);
+          };
+
+          // Lógica principal para salvar Férias (Adicionada flag de conferência e autor)
+          const handleSaveCycle = async (empId, cycleId, uniqueId, isConfirming = false) => {
+            if (!canWrite) return;
+            
+            const currentData = localEdits[uniqueId] || {};
+            const existingDbData = employees.find(e => e.id === empId)?.vacations?.[cycleId] || {};
+            
+            const payload = {
+              preference: currentData.preference !== undefined ? currentData.preference : (existingDbData.preference || ''),
+              sold: currentData.sold !== undefined ? currentData.sold : (existingDbData.sold || 'Não'),
+              soldDays: currentData.soldDays !== undefined ? currentData.soldDays : (existingDbData.soldDays || ''),
+              startDate: currentData.startDate !== undefined ? currentData.startDate : (existingDbData.startDate || ''),
+              endDate: currentData.endDate !== undefined ? currentData.endDate : (existingDbData.endDate || ''),
+              observations: currentData.observations !== undefined ? currentData.observations : (existingDbData.observations || ''),
+              status: currentData.status !== undefined ? currentData.status : (existingDbData.status || 'Aguardando'),
+              confirmed: isConfirming ? true : (existingDbData.confirmed || false),
+              verified: false, // FLAG DE CONFERÊNCIA
+              lastModifiedBy: appUser.username // AUTOR DA ALTERAÇÃO
+            };
+
+            if (isConfirming && (!payload.startDate || !payload.endDate)) {
+                showToast('Preencha a data de Início e Retorno para confirmar as férias.', 'error');
+                return;
+            }
+
+            try {
+              await updateDoc(doc(db, `${basePath}/employees/${empId}`), {
+                [`vacations.${cycleId}`]: payload,
+                lastModifiedBy: appUser.username
+              });
+              logAction(isConfirming ? 'Confirmação' : 'Atualização', 'Férias', `${isConfirming ? 'Confirmou' : 'Atualizou'} férias de ${employees.find(e=>e.id===empId)?.name} (Aquisitivo: ${cycleId})`);
+              showToast(isConfirming ? 'Férias confirmadas e travadas com sucesso!' : 'Planejamento de férias salvo!');
+              
+              setLocalEdits(prev => {
+                 const next = {...prev};
+                 delete next[uniqueId];
+                 return next;
+              });
+            } catch (err) {
+              showToast('Erro ao salvar os dados de férias.', 'error');
+            }
+          };
+
+          // Lógica de conferência dupla de férias
+          const handleVerifyVacation = async (empId, cycleId, empName, lastModifiedBy) => {
+            if (lastModifiedBy === appUser.username) {
+               showToast("A conferência de segurança deve ser realizada por outro utilizador.", "error"); return;
+            }
+            try {
+              await updateDoc(doc(db, `${basePath}/employees/${empId}`), {
+                [`vacations.${cycleId}.verified`]: true,
+                [`vacations.${cycleId}.verifiedBy`]: appUser.name,
+                [`vacations.${cycleId}.verifiedAt`]: new Date().toISOString()
+              });
+              logAction('Conferência', 'Férias', `Realizou a conferência das férias de ${empName} (Aquisitivo: ${cycleId})`);
+              showToast('Dados conferidos com sucesso!');
+            } catch (error) { showToast('Erro ao conferir dados.', 'error'); }
+          };
+
+          const todayTime = new Date().setHours(0,0,0,0);
+          
+          let filteredCycles = allCycles.filter(c => {
+             const startT = parseDate(c.dbData.startDate)?.getTime() || null;
+             const endT = parseDate(c.dbData.endDate)?.getTime() || null;
+             
+             let isCurrent = false;
+             let isHistory = false;
+             
+             if (startT && endT) {
+               if (todayTime >= startT && todayTime <= endT) isCurrent = true;
+               if (todayTime > endT) isHistory = true;
+             }
+
+             if (c.dbData.confirmed && isHistory) {
+                 isHistory = true;
+             } else if (c.dbData.status === 'Finalizado') {
+                 isHistory = true;
+             }
+
+             if (activeSubTab === 'atuais') {
+               return isCurrent;
+             } else if (activeSubTab === 'historico') {
+               return isHistory;
+             } else {
+               return !isCurrent && !isHistory;
+             }
+          });
+
+          filteredCycles = filteredCycles.filter(c => {
+             const matchSearch = c.emp.name.toLowerCase().includes(searchTerm.toLowerCase());
+             const matchDept = filterDepartment ? c.emp.department === filterDepartment : true;
+             const matchUnit = filterUnit ? c.emp.unit === filterUnit : true;
+             const matchSector = filterSector ? c.emp.workSector === filterSector : true;
+             const matchStatus = filterStatus ? (c.dbData.status || 'Aguardando') === filterStatus : true;
+             
+             let matchMonth = true;
+             let matchYear = true;
+
+             if ((activeSubTab === 'programacao' || activeSubTab === 'historico') && c.dbData.startDate) {
+                const [d, m, y] = c.dbData.startDate.split('/');
+                if (filterMonth !== 'all') matchMonth = m === filterMonth;
+                if (filterYear !== 'all') matchYear = y === filterYear;
+             } else if ((activeSubTab === 'programacao' || activeSubTab === 'historico') && !c.dbData.startDate) {
+                if (filterMonth !== 'all' || filterYear !== 'all') return false;
+             }
+
+             return matchSearch && matchDept && matchUnit && matchSector && matchStatus && matchMonth && matchYear;
+          });
+
+          const sortedList = filteredCycles.sort((a,b) => a.emp.name.localeCompare(b.emp.name));
+          const displayedList = sortedList.slice(0, visibleCount);
+
+          const handleExportCSV = () => {
+            const headers = [
+              'Colaborador', 'Departamento', 'Unidade', 'Setor', 'Admissão',
+              'Período Aquisitivo', 'A partir de', 'Limite para Tirar', 
+              'Programação (Início)', 'Programação (Retorno)',
+              'Preferência de Mês', 'Vendeu Dias?', 'Qtd Dias Vendidos', 
+              'Status', 'Observações'
+            ];
+            
+            const rows = filteredCycles.map(c => {
+              const uniqueId = `${c.emp.id}-${c.cycleId}`;
+              const start = getVal(uniqueId, c, 'startDate');
+              const end = getVal(uniqueId, c, 'endDate');
+              const pref = getVal(uniqueId, c, 'preference');
+              const sold = getVal(uniqueId, c, 'sold');
+              const soldDays = getVal(uniqueId, c, 'soldDays');
+              const status = getVal(uniqueId, c, 'status', 'Aguardando');
+              const obs = getVal(uniqueId, c, 'observations');
+
+              return [
+                `"${c.emp.name || ''}"`,
+                `"${c.emp.department || ''}"`,
+                `"${c.emp.unit || ''}"`,
+                `"${c.emp.workSector || ''}"`,
+                `"${c.emp.startDate || ''}"`,
+                `"${c.startAqStr} a ${c.endAqStr}"`,
+                `"${c.canTakeStr}"`,
+                `"${c.limitStr}"`,
+                `"${start || ''}"`,
+                `"${end || ''}"`,
+                `"${pref || ''}"`,
+                `"${sold || 'Não'}"`,
+                `"${soldDays || ''}"`,
+                `"${status}"`,
+                `"${(obs || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`
+              ];
+            });
+
+            const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a'); 
+            link.href = URL.createObjectURL(blob); 
+            link.download = `controle_ferias_${activeSubTab}.csv`; 
+            link.click();
+          };
+
+          return (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <div>
+                  <h2 className="text-3xl font-bold tracking-tight">Controle de Férias</h2>
+                  <p className="text-slate-500 mt-1">Gerencie os períodos aquisitivos, vendas e programações de férias da equipe.</p>
+                </div>
+                <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                  <Button theme={theme} icon={Download} onClick={handleExportCSV} className="w-full md:w-auto">Exportar Planilha</Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4 mb-6">
+                <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full overflow-x-auto">
+                  <button onClick={() => setActiveSubTab('atuais')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'atuais' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Em Férias Atualmente</button>
+                  <button onClick={() => setActiveSubTab('programacao')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'programacao' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Programação</button>
+                  <button onClick={() => setActiveSubTab('historico')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'historico' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Histórico (Realizadas)</button>
+                </div>
+                
+                {(activeSubTab === 'programacao' || activeSubTab === 'historico') && (
+                  <div className="flex flex-col sm:flex-row items-end gap-3 w-full sm:w-auto">
+                    <Select label="Mês (Início)" theme={theme} className="w-full sm:w-40 text-left" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} options={monthOptions} />
+                    <Select label="Ano (Início)" theme={theme} className="w-full sm:w-32 text-left" value={filterYear} onChange={e => setFilterYear(e.target.value)} options={yearOptions} />
+                  </div>
+                )}
+              </div>
+
+              <Card className="p-4 md:p-6 relative z-30 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                  <div className="flex flex-col gap-1 xl:col-span-2">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Buscar Colaborador</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" size={18} />
+                      <input 
+                        type="text" 
+                        placeholder="Nome..." 
+                        className={`w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white`}
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Select label="Departamento" theme={theme} value={filterDepartment} onChange={e => setFilterDepartment(e.target.value)} options={[{value: '', label: 'Todos'}, ...deptsList.map(c => ({value: c, label: c}))]} />
+                  <Select label="Unidade" theme={theme} value={filterUnit} onChange={e => setFilterUnit(e.target.value)} options={[{value: '', label: 'Todas'}, ...unitsList.map(u => ({value: u, label: u}))]} />
+                  <Select label="Setor" theme={theme} value={filterSector} onChange={e => setFilterSector(e.target.value)} options={[{value: '', label: 'Todos'}, ...sectorsList.map(s => ({value: s, label: s}))]} />
+                  <Select label="Status" theme={theme} value={filterStatus} onChange={e => setFilterStatus(e.target.value)} options={[{value: '', label: 'Todos'}, {value: 'Aguardando', label: 'Aguardando'}, {value: 'Aviso Entregue', label: 'Aviso Entregue'}, {value: 'Venda', label: 'Venda'}, {value: 'Finalizado', label: 'Finalizado'}]} />
+                </div>
+              </Card>
+
+              <Card className="p-2 relative z-10">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse min-w-[1400px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                        <th className="p-3 font-medium min-w-[180px]">Colaborador</th>
+                        <th className="p-3 font-medium min-w-[200px]">Prazos (Aquisitivo / Limite)</th>
+                        <th className="p-3 font-medium min-w-[220px]">Programação de Datas</th>
+                        <th className="p-3 font-medium min-w-[160px]">Preferência & Venda</th>
+                        <th className="p-3 font-medium min-w-[160px]">Status / Observações</th>
+                        {canWrite && <th className="p-3 font-medium text-center min-w-[150px]">Ações</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedList.map(c => {
+                        const uniqueId = `${c.emp.id}-${c.cycleId}`;
+                        const confirmed = c.dbData.confirmed;
+
+                        const formatDt = (val) => {
+                            let v = val.replace(/\D/g, '');
+                            if (v.length > 8) v = v.slice(0, 8);
+                            if (v.length > 4) return `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
+                            if (v.length > 2) return `${v.slice(0, 2)}/${v.slice(2)}`;
+                            return v;
+                        };
+
+                        return (
+                          <tr key={uniqueId} className={`border-b border-slate-100 dark:border-slate-800/50 transition-colors ${confirmed ? 'bg-emerald-50/30 dark:bg-emerald-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}>
+                            <td className="p-3 align-top">
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2 truncate">
+                                {c.emp.name}
+                                {c.dbData.verified === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase" title="Aguardando Conferência de outro utilizador">Pendente</span>}
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-1">Admissão: <span className="font-medium text-slate-700 dark:text-slate-300">{c.emp.startDate}</span></div>
+                              <div className="text-[10px] text-slate-500 flex flex-wrap gap-1 mt-1">
+                                <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.department}</span>
+                                <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.unit}</span>
+                                <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.workSector}</span>
+                              </div>
+                            </td>
+                            
+                            <td className="p-3 align-top text-xs space-y-1.5">
+                              <div>
+                                <span className="block text-[10px] uppercase font-bold text-slate-400">Aquisitivo:</span>
+                                <span className="font-medium text-slate-700 dark:text-slate-200">{c.startAqStr} a {c.endAqStr}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] uppercase font-bold text-blue-500/80">Pode tirar a partir de:</span>
+                                <span className="font-bold text-blue-600 dark:text-blue-400">{c.canTakeStr}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] uppercase font-bold text-rose-500/80">Data Limite Absoluta:</span>
+                                <span className="font-bold text-rose-600 dark:text-rose-400">{c.limitStr}</span>
+                              </div>
+                            </td>
+
+                            <td className="p-3 align-top space-y-2">
+                               <div className="flex gap-2">
+                                  <div className="flex-1">
+                                    <label className="text-[10px] font-bold text-slate-500 ml-1">Início</label>
+                                    <input 
+                                      type="text" placeholder="DD/MM/AAAA" disabled={confirmed || !canWrite}
+                                      className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} disabled:opacity-50`}
+                                      value={getVal(uniqueId, c, 'startDate')}
+                                      onChange={e => handleLocalChange(uniqueId, 'startDate', formatDt(e.target.value))}
+                                    />
+                                  </div>
+                                  <div className="flex-1">
+                                    <label className="text-[10px] font-bold text-slate-500 ml-1">Retorno</label>
+                                    <input 
+                                      type="text" placeholder="DD/MM/AAAA" disabled={confirmed || !canWrite}
+                                      className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} disabled:opacity-50`}
+                                      value={getVal(uniqueId, c, 'endDate')}
+                                      onChange={e => handleLocalChange(uniqueId, 'endDate', formatDt(e.target.value))}
+                                    />
+                                  </div>
+                               </div>
+                            </td>
+
+                            <td className="p-3 align-top space-y-2">
+                               <div>
+                                 <input 
+                                   type="text" placeholder="Pref. de mês..." disabled={confirmed || !canWrite}
+                                   className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} disabled:opacity-50`}
+                                   value={getVal(uniqueId, c, 'preference')}
+                                   onChange={e => handleLocalChange(uniqueId, 'preference', e.target.value)}
+                                 />
+                               </div>
+                               <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                                 <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">Venda?</span>
+                                 <select 
+                                   disabled={confirmed || !canWrite}
+                                   className={`flex-1 bg-transparent text-xs outline-none cursor-pointer disabled:opacity-50`}
+                                   value={getVal(uniqueId, c, 'sold', 'Não')}
+                                   onChange={e => handleLocalChange(uniqueId, 'sold', e.target.value)}
+                                 >
+                                   <option value="Não">Não</option>
+                                   <option value="Sim">Sim</option>
+                                 </select>
+                               </div>
+                               {getVal(uniqueId, c, 'sold') === 'Sim' && (
+                                 <input 
+                                   type="number" placeholder="Qtd. Dias Vendidos" disabled={confirmed || !canWrite}
+                                   className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-700/50 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50`}
+                                   value={getVal(uniqueId, c, 'soldDays')}
+                                   onChange={e => handleLocalChange(uniqueId, 'soldDays', e.target.value)}
+                                 />
+                               )}
+                            </td>
+
+                            <td className="p-3 align-top space-y-2">
+                               <select 
+                                 disabled={confirmed || !canWrite}
+                                 className={`w-full px-2.5 py-1.5 text-xs font-bold uppercase rounded-lg outline-none border focus:ring-2 ${theme.ring} disabled:opacity-50 ${
+                                   getVal(uniqueId, c, 'status') === 'Aguardando' ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' :
+                                   getVal(uniqueId, c, 'status') === 'Aviso Entregue' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800' :
+                                   getVal(uniqueId, c, 'status') === 'Finalizado' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800' :
+                                   'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800'
+                                 }`}
+                                 value={getVal(uniqueId, c, 'status', 'Aguardando')}
+                                 onChange={e => handleLocalChange(uniqueId, 'status', e.target.value)}
+                               >
+                                 <option value="Aguardando">Aguardando</option>
+                                 <option value="Aviso Entregue">Aviso Entregue</option>
+                                 <option value="Venda">Venda</option>
+                                 <option value="Finalizado">Finalizado</option>
+                               </select>
+
+                               <textarea 
+                                 placeholder="Observações..." disabled={confirmed || !canWrite} rows="2"
+                                 className={`w-full px-2.5 py-1.5 text-[11px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} resize-none disabled:opacity-50 custom-scrollbar`}
+                                 value={getVal(uniqueId, c, 'observations')}
+                                 onChange={e => handleLocalChange(uniqueId, 'observations', e.target.value)}
+                               />
+                            </td>
+
+                            {canWrite && (
+                              <td className="p-3 align-top text-center space-y-2">
+                                 {c.dbData.verified === false && (
+                                   <button 
+                                     onClick={() => handleVerifyVacation(c.emp.id, c.cycleId, c.emp.name, c.dbData.lastModifiedBy)}
+                                     className="w-full px-3 py-1.5 text-xs font-bold rounded-lg transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/60 flex items-center justify-center gap-1.5 shadow-sm"
+                                   >
+                                     <ShieldCheck size={14} /> Conferir
+                                   </button>
+                                 )}
+                                 {confirmed ? (
+                                   <div className="px-3 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 border border-emerald-200 dark:border-emerald-800">
+                                     <CheckCircle size={16} /> Confirmado
+                                   </div>
+                                 ) : (
+                                   <>
+                                     <button 
+                                       onClick={() => handleSaveCycle(c.emp.id, c.cycleId, uniqueId, false)}
+                                       className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg transition-colors bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600`}
+                                     >
+                                       Salvar Alterações
+                                     </button>
+                                     <button 
+                                       onClick={() => handleSaveCycle(c.emp.id, c.cycleId, uniqueId, true)}
+                                       className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${theme.bg} text-white hover:opacity-90 shadow-md`}
+                                     >
+                                       Confirmar Férias
+                                     </button>
+                                   </>
+                                 )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                      {displayedList.length === 0 && <tr><td colSpan={canWrite ? "6" : "5"} className="p-8 text-center text-slate-500 italic">Nenhum ciclo de férias encontrado nesta categoria.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {sortedList.length > visibleCount && (
+                  <div className="p-4 flex justify-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl mt-2">
+                    <Button variant="secondary" theme={theme} onClick={() => setVisibleCount(prev => prev + 50)} icon={RefreshCw}>
+                      Carregar mais dados
+                    </Button>
+                  </div>
+                )}
               </Card>
             </div>
           );
@@ -6820,6 +7515,7 @@
           const MODULES = [
             { id: 'calendar', label: 'Agenda' },
             { id: 'reports', label: 'Relatórios' },
+            { id: 'vacations', label: 'Férias' },
             { id: 'benefits', label: 'Benefícios' },
             { id: 'companies', label: 'Empresas' },
             { id: 'employees', label: 'Colaboradores' },
@@ -6833,6 +7529,7 @@
             'Administração': { 
               calendar: { read: true, write: true, delete: true },
               reports: { read: true, write: false, delete: false },
+              vacations: { read: true, write: true, delete: true },
               benefits: { read: true, write: true, delete: true },
               companies: { read: true, write: true, delete: true },
               employees: { read: true, write: true, delete: true }, 
@@ -6844,6 +7541,7 @@
             'RH': { 
               calendar: { read: true, write: true, delete: false },
               reports: { read: true, write: false, delete: false },
+              vacations: { read: true, write: true, delete: false },
               benefits: { read: true, write: true, delete: false },
               companies: { read: true, write: false, delete: false },
               employees: { read: true, write: true, delete: false }, 
@@ -6855,6 +7553,7 @@
             'Financeiro': { 
               calendar: { read: true, write: true, delete: false },
               reports: { read: true, write: false, delete: false },
+              vacations: { read: false, write: false, delete: false },
               benefits: { read: true, write: false, delete: false },
               companies: { read: true, write: false, delete: false },
               employees: { read: true, write: false, delete: false }, 
