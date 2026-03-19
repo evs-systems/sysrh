@@ -3233,7 +3233,6 @@
                           <th className="p-4 font-medium">Local de Trabalho</th>
                           <th className="p-4 font-medium">Detalhes do Benefício</th>
                           <th className="p-4 font-medium text-right">Valor Registrado</th>
-                          <th className="p-4 font-medium text-center">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3242,7 +3241,6 @@
                             <td className="p-4">
                               <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2 truncate">
                                 {emp.name || 'Desconhecido'}
-                                {emp.isVerifiedProfile === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 uppercase">Pendente</span>}
                               </div>
                               {emp._vacData?.tagText && (
                                 <div className="mt-1 mb-1">
@@ -3259,16 +3257,9 @@
                             <td className="p-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
                                 {formatCurrency(emp._benefitValue)}
                             </td>
-                            <td className="p-4 text-center">
-                               <div className="flex justify-center">
-                                 {emp.isVerifiedProfile === false && canWrite && (
-                                    <button onClick={() => handleVerify(emp.id, emp.name, emp.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência"><ShieldCheck size={18} /></button>
-                                 )}
-                               </div>
-                            </td>
                           </tr>
                         ))}
-                        {sortedList.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">Nenhum colaborador encontrado com este benefício ativo.</td></tr>}
+                        {sortedList.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-500 italic">Nenhum colaborador encontrado com este benefício ativo.</td></tr>}
                       </tbody>
                     </table>
                   )}
@@ -3787,10 +3778,45 @@
           const [visibleCount, setVisibleCount] = useState(50);
           const [localEdits, setLocalEdits] = useState({});
           
-          // NOVO ESTADO: Controla qual menu suspenso customizado está aberto na tabela
-          const [openDropdown, setOpenDropdown] = useState(null);
+          // NOVO ESTADO: Dropdown Absoluto e Inteligente (Flutuante)
+          const [dropdownState, setDropdownState] = useState(null);
 
           const canWrite = appUser?.permissions?.vacations?.write || appUser?.sector === 'Administração';
+
+          // Listener inteligente: fecha o menu se rolar a página ou clicar fora
+          useEffect(() => {
+            const handleClose = () => setDropdownState(null);
+            if (dropdownState) {
+              window.addEventListener('scroll', handleClose, true);
+              document.addEventListener('mousedown', handleClose);
+            }
+            return () => {
+              window.removeEventListener('scroll', handleClose, true);
+              document.removeEventListener('mousedown', handleClose);
+            };
+          }, [dropdownState]);
+
+          const toggleDropdown = (e, uniqueId, field, currentVal, optionsList, renderLabel) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = `${uniqueId}-${field}`;
+            if (dropdownState?.id === id) {
+              setDropdownState(null);
+              return;
+            }
+            // Calcula a posição exata baseada na tela para o menu flutuar livremente
+            const btnRect = e.currentTarget.getBoundingClientRect();
+            const cardEl = e.currentTarget.closest('.vacations-table-card');
+            if (cardEl) {
+              const cardRect = cardEl.getBoundingClientRect();
+              setDropdownState({
+                id, uniqueId, field, currentVal, optionsList, renderLabel,
+                top: btnRect.bottom - cardRect.top,
+                left: btnRect.left - cardRect.left,
+                width: btnRect.width
+              });
+            }
+          };
 
           useEffect(() => {
             setVisibleCount(50);
@@ -3837,7 +3863,6 @@
             let minDisplayYear = currentYear;
             if (emp.createdAt) {
                 const createdYear = new Date(emp.createdAt).getFullYear();
-                // -2 para garantir que o ciclo cuja data limite vence neste ano atual seja gerado
                 minDisplayYear = Math.max(currentYear, createdYear - 2); 
             } else {
                 minDisplayYear = Math.max(currentYear, currentTodayYear - 2);
@@ -4124,8 +4149,9 @@
                 </div>
               </Card>
 
-              <Card className="p-2 relative z-10 overflow-hidden">
-                <div className={`overflow-x-auto custom-scrollbar ${openDropdown ? 'pb-32 transition-all duration-300' : 'transition-all duration-300'}`}>
+              {/* Aqui removemos o overflow-hidden para o menu poder "vazar" sem expandir a tabela */}
+              <Card className="p-2 relative z-10 vacations-table-card">
+                <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse min-w-[1400px]">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
@@ -4217,32 +4243,12 @@
                                  <button 
                                    type="button"
                                    disabled={confirmed || !canWrite}
-                                   onClick={() => setOpenDropdown(openDropdown === `${uniqueId}-sold` ? null : `${uniqueId}-sold`)}
+                                   onClick={(e) => toggleDropdown(e, uniqueId, 'sold', getVal(uniqueId, c, 'sold', 'Não'), ['Não', 'Sim'], (opt) => `Venda: ${opt}`)}
                                    className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between shadow-sm`}
                                  >
                                    <span className="truncate">{getVal(uniqueId, c, 'sold', 'Não') === 'Sim' ? 'Venda: Sim' : 'Venda: Não'}</span>
-                                   <ChevronDown size={14} className={`absolute right-2.5 text-slate-400 transition-transform ${openDropdown === `${uniqueId}-sold` ? 'rotate-180' : ''}`} />
+                                   <ChevronDown size={14} className={`absolute right-2.5 text-slate-400 transition-transform ${dropdownState?.id === `${uniqueId}-sold` ? 'rotate-180' : ''}`} />
                                  </button>
-                                 
-                                 {openDropdown === `${uniqueId}-sold` && (
-                                   <>
-                                     <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)}></div>
-                                     <div className="absolute top-[100%] left-0 min-w-full mt-1 z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                       <div className="p-1 space-y-0.5">
-                                         {['Não', 'Sim'].map(opt => (
-                                            <button
-                                              key={opt}
-                                              type="button"
-                                              onClick={() => { handleLocalChange(uniqueId, 'sold', opt); setOpenDropdown(null); }}
-                                              className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${getVal(uniqueId, c, 'sold', 'Não') === opt ? `${theme.lightBg} ${theme.text} font-bold` : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
-                                            >
-                                              Venda: {opt}
-                                            </button>
-                                         ))}
-                                       </div>
-                                     </div>
-                                   </>
-                                 )}
                                </div>
 
                                {getVal(uniqueId, c, 'sold') === 'Sim' && (
@@ -4260,7 +4266,7 @@
                                  <button 
                                    type="button"
                                    disabled={confirmed || !canWrite}
-                                   onClick={() => setOpenDropdown(openDropdown === `${uniqueId}-status` ? null : `${uniqueId}-status`)}
+                                   onClick={(e) => toggleDropdown(e, uniqueId, 'status', getVal(uniqueId, c, 'status', 'Aguardando'), ['Aguardando', 'Aviso Entregue', 'Venda', 'Finalizado'], (opt) => opt)}
                                    className={`w-full px-2.5 py-1.5 text-xs font-bold rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between border shadow-sm ${
                                      getVal(uniqueId, c, 'status', 'Aguardando') === 'Aguardando' ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:ring-slate-500' :
                                      getVal(uniqueId, c, 'status', 'Aguardando') === 'Aviso Entregue' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 focus:ring-blue-500' :
@@ -4269,28 +4275,8 @@
                                    }`}
                                  >
                                    <span className="truncate">Status: {getVal(uniqueId, c, 'status', 'Aguardando')}</span>
-                                   <ChevronDown size={14} className={`absolute right-2.5 transition-transform opacity-60 ${openDropdown === `${uniqueId}-status` ? 'rotate-180' : ''}`} />
+                                   <ChevronDown size={14} className={`absolute right-2.5 transition-transform opacity-60 ${dropdownState?.id === `${uniqueId}-status` ? 'rotate-180' : ''}`} />
                                  </button>
-
-                                 {openDropdown === `${uniqueId}-status` && (
-                                   <>
-                                     <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)}></div>
-                                     <div className="absolute top-[100%] right-0 min-w-full mt-1 z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                       <div className="p-1 space-y-0.5">
-                                         {['Aguardando', 'Aviso Entregue', 'Venda', 'Finalizado'].map(opt => (
-                                            <button
-                                              key={opt}
-                                              type="button"
-                                              onClick={() => { handleLocalChange(uniqueId, 'status', opt); setOpenDropdown(null); }}
-                                              className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${getVal(uniqueId, c, 'status', 'Aguardando') === opt ? `${theme.lightBg} ${theme.text} font-bold` : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
-                                            >
-                                              {opt}
-                                            </button>
-                                         ))}
-                                       </div>
-                                     </div>
-                                   </>
-                                 )}
                                </div>
 
                                <textarea 
@@ -4340,6 +4326,32 @@
                     </tbody>
                   </table>
                 </div>
+
+                {/* Renderização do Popover Absoluto */}
+                {dropdownState && (
+                  <div 
+                    className="absolute z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                    style={{ top: dropdownState.top + 4, left: dropdownState.left, width: dropdownState.width }}
+                    onMouseDown={(e) => e.stopPropagation()} // Impede o clique de fechar o menu acidentalmente
+                  >
+                    <div className="p-1 space-y-0.5">
+                      {dropdownState.optionsList.map(opt => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={(e) => {
+                              e.stopPropagation();
+                              handleLocalChange(dropdownState.uniqueId, dropdownState.field, opt);
+                              setDropdownState(null);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${dropdownState.currentVal === opt ? `${theme.lightBg} ${theme.text} font-bold` : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                        >
+                          {dropdownState.renderLabel(opt)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {sortedList.length > visibleCount && (
                   <div className="p-4 flex justify-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl mt-2">
