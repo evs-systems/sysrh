@@ -4162,6 +4162,21 @@
                             return v;
                         };
 
+                        const startStr = getVal(uniqueId, c, 'startDate');
+                        const endStr = getVal(uniqueId, c, 'endDate');
+                        let vacationDays = null;
+                        
+                        if (startStr && startStr.length === 10 && endStr && endStr.length === 10) {
+                            const [sd, sm, sy] = startStr.split('/');
+                            const [ed, em, ey] = endStr.split('/');
+                            const sDate = new Date(sy, sm - 1, sd);
+                            const eDate = new Date(ey, em - 1, ed);
+                            if (!isNaN(sDate.getTime()) && !isNaN(eDate.getTime()) && eDate >= sDate) {
+                                const diffTime = eDate.getTime() - sDate.getTime();
+                                vacationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 porque o último dia também é contado
+                            }
+                        }
+
                         return (
                           <tr key={uniqueId} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-3 align-top">
@@ -4174,6 +4189,11 @@
                                 <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.unit}</span>
                                 <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.workSector}</span>
                               </div>
+                              {vacationDays !== null && (
+                                <div className={`mt-2 text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 ${confirmed ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800' : 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800'}`}>
+                                  <CalendarIcon size={12} /> {vacationDays} {vacationDays === 1 ? 'dia de férias' : 'dias de férias'}
+                                </div>
+                              )}
                             </td>
                             
                             <td className="p-3 align-top text-xs space-y-1.5">
@@ -4282,27 +4302,29 @@
                             </td>
 
                             {canWrite && (
-                              <td className="p-3 align-top text-center space-y-2">
-                                 {confirmed ? (
-                                   <div className="px-3 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 border border-emerald-200 dark:border-emerald-800">
-                                     <CheckCircle size={16} /> Confirmado
-                                   </div>
-                                 ) : (
-                                   <>
-                                     <button 
-                                       onClick={() => handleSaveCycle(c.emp.id, c.cycleId, uniqueId, false)}
-                                       className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg transition-colors bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600`}
-                                     >
-                                       Salvar Alterações
-                                     </button>
-                                     <button 
-                                       onClick={() => handleSaveCycle(c.emp.id, c.cycleId, uniqueId, true)}
-                                       className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${theme.bg} text-white hover:opacity-90 shadow-md`}
-                                     >
-                                       Confirmar Férias
-                                     </button>
-                                   </>
-                                 )}
+                              <td className="p-3 align-middle text-center">
+                                 <div className="flex flex-col justify-center gap-2 h-full">
+                                   {confirmed ? (
+                                     <div className="px-3 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 border border-emerald-200 dark:border-emerald-800">
+                                       <CheckCircle size={16} /> Confirmado
+                                     </div>
+                                   ) : (
+                                     <>
+                                       <button 
+                                         onClick={() => handleSaveCycle(c.emp.id, c.cycleId, uniqueId, false)}
+                                         className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg transition-colors bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600`}
+                                       >
+                                         Salvar Alterações
+                                       </button>
+                                       <button 
+                                         onClick={() => handleSaveCycle(c.emp.id, c.cycleId, uniqueId, true)}
+                                         className={`w-full px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${theme.bg} text-white hover:opacity-90 shadow-md`}
+                                       >
+                                         Confirmar Férias
+                                       </button>
+                                     </>
+                                   )}
+                                 </div>
                               </td>
                             )}
                           </tr>
