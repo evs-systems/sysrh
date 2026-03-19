@@ -525,7 +525,7 @@
           const [toast, setToast] = useState(null);
 
           // Confirmation Modal State
-          const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
+          const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' });
 
           // Login/Setup State
           const [authForm, setAuthForm] = useState({ username: '', password: '' });
@@ -537,8 +537,8 @@
             setTimeout(() => setToast(null), 3000);
           };
 
-          const requestConfirm = (message, onConfirm) => {
-            setConfirmDialog({ isOpen: true, message, onConfirm });
+          const requestConfirm = (message, onConfirm, confirmText = 'Excluir', confirmVariant = 'danger') => {
+            setConfirmDialog({ isOpen: true, message, onConfirm, confirmText, confirmVariant });
           };
 
           useEffect(() => {
@@ -1053,7 +1053,7 @@
                     {activeTab === 'dashboard' && <DashboardView theme={theme} employees={employees} payments={payments} disciplinary={disciplinary} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
-                    {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} />}
+                    {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
                     {activeTab === 'benefits' && <BenefitsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} />}
                     {activeTab === 'companies' && <CompaniesView theme={theme} basePath={basePath} appUser={appUser} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'employees' && <EmployeesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
@@ -1079,7 +1079,7 @@
               {/* Modal de Confirmação Seguro (Substitui window.confirm) */}
               {confirmDialog.isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setConfirmDialog({ isOpen: false, message: '', onConfirm: null })}></div>
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setConfirmDialog({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' })}></div>
                   <div className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl p-6 w-full max-w-sm flex flex-col animate-in zoom-in-95 duration-200">
                     <div className="flex items-center gap-4 text-amber-500 mb-4">
                       <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex-shrink-0">
@@ -1089,11 +1089,11 @@
                     </div>
                     <p className="text-slate-600 dark:text-slate-300 mb-6 font-medium leading-relaxed">{confirmDialog.message}</p>
                     <div className="flex justify-end gap-3">
-                      <Button variant="ghost" theme={theme} onClick={() => setConfirmDialog({ isOpen: false, message: '', onConfirm: null })}>Cancelar</Button>
-                      <Button variant="danger" theme={theme} onClick={() => {
+                      <Button variant="ghost" theme={theme} onClick={() => setConfirmDialog({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' })}>Cancelar</Button>
+                      <Button variant={confirmDialog.confirmVariant || 'danger'} theme={theme} onClick={() => {
                         if (confirmDialog.onConfirm) confirmDialog.onConfirm();
-                        setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
-                      }}>Excluir</Button>
+                        setConfirmDialog({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' });
+                      }}>{confirmDialog.confirmText || 'Excluir'}</Button>
                     </div>
                   </div>
                 </div>
@@ -3760,7 +3760,7 @@
           );
         }
 
-        function VacationsView({ theme, basePath, appUser, employees, showToast, logAction, db }) {
+        function VacationsView({ theme, basePath, appUser, employees, showToast, logAction, db, requestConfirm }) {
           const [activeSubTab, setActiveSubTab] = useState('atuais');
           const [searchTerm, setSearchTerm] = useState('');
           const [filterDepartment, setFilterDepartment] = useState('');
@@ -3918,6 +3918,13 @@
             const currentData = localEdits[uniqueId] || {};
             const existingDbData = employees.find(e => e.id === empId)?.vacations?.[cycleId] || {};
             
+            // NOVA LÓGICA: Captura a data exata da confirmação para fixar o registro no histórico
+            let confirmedDate = existingDbData.confirmedDate || '';
+            if (isConfirming && !existingDbData.confirmed) {
+                 const todayObj = new Date();
+                 confirmedDate = `${String(todayObj.getDate()).padStart(2, '0')}/${String(todayObj.getMonth() + 1).padStart(2, '0')}/${todayObj.getFullYear()}`;
+            }
+
             const payload = {
               preference: currentData.preference !== undefined ? currentData.preference : (existingDbData.preference || ''),
               sold: currentData.sold !== undefined ? currentData.sold : (existingDbData.sold || 'Não'),
@@ -3927,29 +3934,42 @@
               observations: currentData.observations !== undefined ? currentData.observations : (existingDbData.observations || ''),
               status: currentData.status !== undefined ? currentData.status : (existingDbData.status || 'Aguardando'),
               confirmed: isConfirming ? true : (existingDbData.confirmed || false),
+              confirmedDate: confirmedDate,
               lastModifiedBy: appUser.username
             };
 
-            if (isConfirming && (!payload.startDate || !payload.endDate)) {
+            // Se vendeu 30 dias, as datas são desconsideradas e zeradas. Caso contrário, exige datas na confirmação.
+            if (payload.sold === 'Sim' && String(payload.soldDays) === '30') {
+                payload.startDate = '';
+                payload.endDate = '';
+            } else if (isConfirming && (!payload.startDate || !payload.endDate)) {
                 showToast('Preencha a data de Início e Retorno para confirmar as férias.', 'error');
                 return;
             }
 
-            try {
-              await updateDoc(doc(db, `${basePath}/employees/${empId}`), {
-                [`vacations.${cycleId}`]: payload,
-                lastModifiedBy: appUser.username
-              });
-              logAction(isConfirming ? 'Confirmação' : 'Atualização', 'Férias', `${isConfirming ? 'Confirmou' : 'Atualizou'} férias de ${employees.find(e=>e.id===empId)?.name} (Aquisitivo: ${cycleId})`);
-              showToast(isConfirming ? 'Férias confirmadas e travadas com sucesso!' : 'Planejamento de férias salvo!');
-              
-              setLocalEdits(prev => {
-                 const next = {...prev};
-                 delete next[uniqueId];
-                 return next;
-              });
-            } catch (err) {
-              showToast('Erro ao salvar os dados de férias.', 'error');
+            const executeSave = async () => {
+              try {
+                await updateDoc(doc(db, `${basePath}/employees/${empId}`), {
+                  [`vacations.${cycleId}`]: payload,
+                  lastModifiedBy: appUser.username
+                });
+                logAction(isConfirming ? 'Confirmação' : 'Atualização', 'Férias', `${isConfirming ? 'Confirmou' : 'Atualizou'} férias de ${employees.find(e=>e.id===empId)?.name} (Aquisitivo: ${cycleId})`);
+                showToast(isConfirming ? 'Férias confirmadas e travadas com sucesso!' : 'Planejamento de férias salvo!');
+                
+                setLocalEdits(prev => {
+                   const next = {...prev};
+                   delete next[uniqueId];
+                   return next;
+                });
+              } catch (err) {
+                showToast('Erro ao salvar os dados de férias.', 'error');
+              }
+            };
+
+            if (isConfirming) {
+              requestConfirm('Tem certeza que deseja confirmar e travar as férias deste colaborador? Os dias programados passarão a ser descontados na aba de benefícios.', executeSave, 'Confirmar Férias', 'primary');
+            } else {
+              executeSave();
             }
           };
 
@@ -3958,6 +3978,7 @@
           let filteredCycles = allCycles.filter(c => {
              const startT = parseDate(c.dbData.startDate)?.getTime() || null;
              const endT = parseDate(c.dbData.endDate)?.getTime() || null;
+             const isSoldAll = c.dbData.sold === 'Sim' && String(c.dbData.soldDays) === '30';
              
              let isCurrent = false;
              let isHistory = false;
@@ -3971,6 +3992,8 @@
                  isHistory = true;
              } else if (c.dbData.status === 'Finalizado') {
                  isHistory = true;
+             } else if (c.dbData.confirmed && isSoldAll) {
+                 isHistory = true; // Move "Vendeu todos os dias" confirmado direto pro Histórico
              }
 
              if (activeSubTab === 'atuais') {
@@ -4022,8 +4045,23 @@
                        matchMonth = isInStart || isInEnd;
                    }
                 } else if (activeSubTab === 'historico') {
-                   matchMonth = false;
-                   matchYear = false;
+                   const isSoldAll = c.dbData.sold === 'Sim' && String(c.dbData.soldDays) === '30';
+                   if (isSoldAll) {
+                       // NOVO: Usa a data de confirmação salva para exibir exatamente no mês em que foi vendido!
+                       if (c.dbData.confirmedDate) {
+                           const [cD, cM, cY] = c.dbData.confirmedDate.split('/');
+                           if (filterYear !== 'all') matchYear = (cY === filterYear);
+                           if (filterMonth !== 'all') matchMonth = (cM === filterMonth);
+                       } else {
+                           // Fallback se não houver data salva
+                           const limitYear = c.limitStr.split('/')[2];
+                           if (filterYear !== 'all') matchYear = (limitYear === filterYear);
+                           matchMonth = true;
+                       }
+                   } else {
+                       matchMonth = false;
+                       matchYear = false;
+                   }
                 } else {
                    const limitYear = c.limitStr.split('/')[2];
                    if (filterYear !== 'all') {
@@ -4111,8 +4149,8 @@
                 
                 {(activeSubTab === 'programacao' || activeSubTab === 'historico') && (
                   <div className="flex flex-col sm:flex-row items-end gap-3 w-full sm:w-auto">
-                    <Select label="Mês (Início)" theme={theme} className="w-full sm:w-40 text-left" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} options={monthOptions} />
-                    <Select label="Ano (Início)" theme={theme} className="w-full sm:w-32 text-left" value={filterYear} onChange={e => setFilterYear(e.target.value)} options={yearOptions} />
+                    <Select label="Mês (Início/Venda)" theme={theme} className="w-full sm:w-40 text-left" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} options={monthOptions} />
+                    <Select label="Ano (Início/Venda)" theme={theme} className="w-full sm:w-32 text-left" value={filterYear} onChange={e => setFilterYear(e.target.value)} options={yearOptions} />
                   </div>
                 )}
               </div>
@@ -4135,7 +4173,7 @@
                   <Select label="Departamento" theme={theme} value={filterDepartment} onChange={e => setFilterDepartment(e.target.value)} options={[{value: '', label: 'Todos'}, ...deptsList.map(c => ({value: c, label: c}))]} />
                   <Select label="Unidade" theme={theme} value={filterUnit} onChange={e => setFilterUnit(e.target.value)} options={[{value: '', label: 'Todas'}, ...unitsList.map(u => ({value: u, label: u}))]} />
                   <Select label="Setor" theme={theme} value={filterSector} onChange={e => setFilterSector(e.target.value)} options={[{value: '', label: 'Todos'}, ...sectorsList.map(s => ({value: s, label: s}))]} />
-                  <Select label="Status" theme={theme} value={filterStatus} onChange={e => setFilterStatus(e.target.value)} options={[{value: '', label: 'Todos'}, {value: 'Aguardando', label: 'Aguardando'}, {value: 'Aviso Entregue', label: 'Aviso Entregue'}, {value: 'Venda', label: 'Venda'}, {value: 'Finalizado', label: 'Finalizado'}]} />
+                  <Select label="Status" theme={theme} value={filterStatus} onChange={e => setFilterStatus(e.target.value)} options={[{value: '', label: 'Todos'}, {value: 'Aguardando', label: 'Aguardando'}, {value: 'Aviso Entregue', label: 'Aviso Entregue'}, {value: 'Venda', label: 'Venda'}, {value: 'Próxima Programação', label: 'Próxima Programação'}]} />
                 </div>
               </Card>
 
@@ -4165,8 +4203,13 @@
                             return v;
                         };
 
-                        const startStr = getVal(uniqueId, c, 'startDate');
-                        const endStr = getVal(uniqueId, c, 'endDate');
+                        // Verifica se vendeu os 30 dias para bloquear datas
+                        const soldStr = getVal(uniqueId, c, 'sold');
+                        const soldDaysStr = getVal(uniqueId, c, 'soldDays');
+                        const isSoldAll = soldStr === 'Sim' && String(soldDaysStr) === '30';
+
+                        const startStr = isSoldAll ? '' : getVal(uniqueId, c, 'startDate');
+                        const endStr = isSoldAll ? '' : getVal(uniqueId, c, 'endDate');
                         let vacationDays = null;
                         
                         if (startStr && startStr.length === 10 && endStr && endStr.length === 10) {
@@ -4176,7 +4219,7 @@
                             const eDate = new Date(ey, em - 1, ed);
                             if (!isNaN(sDate.getTime()) && !isNaN(eDate.getTime()) && eDate >= sDate) {
                                 const diffTime = eDate.getTime() - sDate.getTime();
-                                vacationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 porque o último dia também é contado
+                                vacationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
                             }
                         }
 
@@ -4192,9 +4235,15 @@
                                 <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.unit}</span>
                                 <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.workSector}</span>
                               </div>
-                              {vacationDays !== null && (
+                              
+                              {/* Nova Lógica: Exibe tag com a data em que a venda integral foi confirmada */}
+                              {isSoldAll ? (
+                                <div className={`mt-2 text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 ${confirmed ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800' : 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800'}`}>
+                                  <DollarSign size={12} /> {confirmed && c.dbData.confirmedDate ? `Vendido em ${c.dbData.confirmedDate}` : 'Vendeu todos os dias'}
+                                </div>
+                              ) : vacationDays !== null && (
                                 <div className={`mt-2 text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 ${confirmed ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800' : 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800'}`}>
-                                  <CalendarIcon size={12} /> {vacationDays} {vacationDays === 1 ? 'dia de férias' : 'dias de férias'}
+                                  <CalendarIcon size={12} /> {vacationDays} {vacationDays === 1 ? 'dia programado' : 'dias programados'}
                                 </div>
                               )}
                             </td>
@@ -4219,18 +4268,18 @@
                                   <div className="w-[110px]">
                                     <label className="text-[10px] font-bold text-slate-500 ml-1">Início</label>
                                     <input 
-                                      type="text" placeholder="DD/MM/AAAA" disabled={confirmed || !canWrite}
+                                      type="text" placeholder={isSoldAll ? "Desativado" : "DD/MM/AAAA"} disabled={confirmed || !canWrite || isSoldAll}
                                       className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} disabled:opacity-50`}
-                                      value={getVal(uniqueId, c, 'startDate')}
+                                      value={startStr}
                                       onChange={e => handleLocalChange(uniqueId, 'startDate', formatDt(e.target.value))}
                                     />
                                   </div>
                                   <div className="w-[110px]">
                                     <label className="text-[10px] font-bold text-slate-500 ml-1">Retorno</label>
                                     <input 
-                                      type="text" placeholder="DD/MM/AAAA" disabled={confirmed || !canWrite}
+                                      type="text" placeholder={isSoldAll ? "Desativado" : "DD/MM/AAAA"} disabled={confirmed || !canWrite || isSoldAll}
                                       className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} disabled:opacity-50`}
-                                      value={getVal(uniqueId, c, 'endDate')}
+                                      value={endStr}
                                       onChange={e => handleLocalChange(uniqueId, 'endDate', formatDt(e.target.value))}
                                     />
                                   </div>
@@ -4280,7 +4329,7 @@
                                  <button 
                                    type="button"
                                    disabled={confirmed || !canWrite}
-                                   onClick={(e) => toggleDropdown(e, uniqueId, 'status', getVal(uniqueId, c, 'status', 'Aguardando'), ['Aguardando', 'Aviso Entregue', 'Venda', 'Finalizado'], (opt) => opt)}
+                                   onClick={(e) => toggleDropdown(e, uniqueId, 'status', getVal(uniqueId, c, 'status', 'Aguardando'), ['Aguardando', 'Aviso Entregue', 'Venda', 'Próxima Programação'], (opt) => opt)}
                                    className={`vacations-dropdown-btn w-full px-2.5 py-1.5 text-xs font-bold rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between border shadow-sm ${
                                      getVal(uniqueId, c, 'status', 'Aguardando') === 'Aguardando' ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:ring-slate-500' :
                                      getVal(uniqueId, c, 'status', 'Aguardando') === 'Aviso Entregue' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 focus:ring-blue-500' :
