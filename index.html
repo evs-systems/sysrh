@@ -4986,7 +4986,7 @@
 
           // ====== FUNÇÕES DE IMPORTAÇÃO E EXPORTAÇÃO ======
           const handleExportCSV = () => {
-            const headers = ['Nome', 'CPF', 'RG', 'Email', 'Contato', 'Data Nascimento', 'Genero', 'Estado Civil', 'Cargo', 'Departamento', 'Empresa', 'CNPJ', 'Unidade', 'Setor', 'Salario Base', 'Tipo', 'Status', 'Data Admissao', 'CEP', 'Rua', 'Numero', 'Bairro', 'Estado', 'Banco', 'Tipo Conta', 'Agencia', 'Conta', 'Tipo Pix', 'Chave Pix', 'Banco Diferente (Pix)', 'Banco do Pix', 'É Estágio', 'Início Estágio', 'Fim Estágio'];
+            const headers = ['Nome', 'CPF', 'RG', 'Email', 'Contato', 'Data Nascimento', 'Genero', 'Estado Civil', 'Cargo', 'Departamento', 'Empresa', 'CNPJ', 'Unidade', 'Setor', 'Salario Base', 'Tipo', 'Status', 'Data Admissao', 'CEP', 'Rua', 'Numero', 'Bairro', 'Estado', 'Banco', 'Tipo Conta', 'Agencia', 'Conta', 'Tipo Pix', 'Chave Pix', 'Banco Diferente (Pix)', 'Banco do Pix', 'É Estágio', 'Início Estágio', 'Fim Estágio', 'É Contrato', 'Início Contrato', 'Fim Contrato'];
             const rows = currentList.map(e => [
               `"${e.name || ''}"`, `"${e.cpf || ''}"`, `"${e.rg || ''}"`, `"${e.email || ''}"`, `"${e.contact || ''}"`,
               `"${e.birthDate || ''}"`, `"${e.gender || ''}"`, `"${e.isMarried || ''}"`, `"${e.role || ''}"`, `"${e.department || ''}"`,
@@ -4994,7 +4994,8 @@
               `"${e.employeeType || ''}"`, `"${e.status || ''}"`, `"${e.startDate || ''}"`, `"${e.cep || ''}"`, `"${e.street || ''}"`,
               `"${e.number || ''}"`, `"${e.neighborhood || ''}"`, `"${e.state || ''}"`, `"${e.bankName || ''}"`, `"${e.accountType || 'Corrente'}"`,
               `"${e.agency || ''}"`, `"${e.account || ''}"`, `"${e.pixType || ''}"`, `"${e.pixKey || ''}"`, `"${e.pixDifferentBank || 'Não'}"`, `"${e.pixBankName || ''}"`,
-              `"${e.isInternship || 'Não'}"`, `"${e.internshipStartDate || ''}"`, `"${e.internshipEndDate || ''}"`
+              `"${e.isInternship || 'Não'}"`, `"${e.internshipStartDate || ''}"`, `"${e.internshipEndDate || ''}"`,
+              `"${e.isContract || 'Não'}"`, `"${e.contractStartDate || ''}"`, `"${e.contractEndDate || ''}"`
             ]);
             const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
             const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -5005,8 +5006,8 @@
           };
 
           const handleDownloadTemplate = () => {
-            const headers = ['Nome Completo', 'CPF', 'RG', 'Email', 'Contato', 'Data Nascimento', 'Genero', 'Estado Civil', 'Cargo', 'Departamento', 'Empresa (Igual Cadastrada)', 'Unidade', 'Setor', 'Salario Base', 'Tipo (Efetivo/Freelancer)', 'Data Admissao', 'CEP', 'Rua', 'Numero', 'Bairro', 'Estado', 'Banco', 'Tipo Conta', 'Agencia', 'Conta', 'Tipo Pix', 'Chave Pix', 'Banco Diferente (Pix)', 'Banco do Pix', 'É Estágio', 'Início Estágio', 'Fim Estágio'];
-            const sampleRow = ['João Silva', '123.456.789-00', '12.345.678-9', 'joao@email.com', '(11) 99999-9999', '01/01/1990', 'Masculino', 'Não', 'Vendedor', 'Vendas', 'Minha Empresa LTDA', 'Matriz', 'Comercial', '2500,00', 'Efetivo', '15/03/2026', '01001-000', 'Praça da Sé', '1', 'Sé', 'SP', 'Itaú', 'Corrente', '0001', '12345-6', 'CPF', '12345678900', 'Não', '', 'Não', '', ''];
+            const headers = ['Nome Completo', 'CPF', 'RG', 'Email', 'Contato', 'Data Nascimento', 'Genero', 'Estado Civil', 'Cargo', 'Departamento', 'Empresa (Igual Cadastrada)', 'Unidade', 'Setor', 'Salario Base', 'Tipo (Efetivo/Freelancer)', 'Data Admissao', 'CEP', 'Rua', 'Numero', 'Bairro', 'Estado', 'Banco', 'Tipo Conta', 'Agencia', 'Conta', 'Tipo Pix', 'Chave Pix', 'Banco Diferente (Pix)', 'Banco do Pix', 'É Estágio', 'Início Estágio', 'Fim Estágio', 'É Contrato', 'Início Contrato', 'Fim Contrato'];
+            const sampleRow = ['João Silva', '123.456.789-00', '12.345.678-9', 'joao@email.com', '(11) 99999-9999', '01/01/1990', 'Masculino', 'Não', 'Vendedor', 'Vendas', 'Minha Empresa LTDA', 'Matriz', 'Comercial', '2500,00', 'Efetivo', '15/03/2026', '01001-000', 'Praça da Sé', '1', 'Sé', 'SP', 'Itaú', 'Corrente', '0001', '12345-6', 'CPF', '12345678900', 'Não', '', 'Não', '', '', 'Não', '', ''];
             const csvContent = [headers.join(';'), sampleRow.map(v => `"${v}"`).join(';')].join('\n');
             const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a'); 
@@ -5077,6 +5078,11 @@
                   empData.isInternship = row[29] || 'Não';
                   empData.internshipStartDate = formatDateInput(row[30] || '');
                   empData.internshipEndDate = formatDateInput(row[31] || '');
+                  
+                  // NOVO MAPEAMENTO DE CONTRATOS
+                  empData.isContract = row[32] || 'Não';
+                  empData.contractStartDate = formatDateInput(row[33] || '');
+                  empData.contractEndDate = formatDateInput(row[34] || '');
                   
                   promises.push(addDoc(collection(db, `${basePath}/employees`), empData));
                   importedCount++;
