@@ -3877,9 +3877,12 @@
 
               if (currentYear >= minDisplayYear || Object.keys(dbData).length > 0) {
                   const startAq = new Date(currentYear, startD.getMonth(), startD.getDate());
-                  const endAq = new Date(currentYear + 1, startD.getMonth(), startD.getDate() - 1);
-                  const canTake = new Date(currentYear + 1, startD.getMonth() + 1, startD.getDate() - 1);
-                  const limit = new Date(currentYear + 2, startD.getMonth() + 1, startD.getDate() - 1);
+                  const endAq = new Date(currentYear + 1, startD.getMonth(), startD.getDate());
+                  
+                  // Pode tirar a partir do mês seguinte (+1) ao final do período aquisitivo
+                  const canTake = new Date(currentYear + 1, startD.getMonth() + 1, startD.getDate());
+                  // O limite passa a ser exatamente 1 ano depois (+2 no ano) do mês em que pode começar a tirar (+1 no mês)
+                  const limit = new Date(currentYear + 2, startD.getMonth() + 1, startD.getDate());
 
                   allCycles.push({
                     emp,
