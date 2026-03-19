@@ -3786,6 +3786,9 @@
 
           const [visibleCount, setVisibleCount] = useState(50);
           const [localEdits, setLocalEdits] = useState({});
+          
+          // NOVO ESTADO: Controla qual menu suspenso customizado está aberto na tabela
+          const [openDropdown, setOpenDropdown] = useState(null);
 
           const canWrite = appUser?.permissions?.vacations?.write || appUser?.sector === 'Administração';
 
@@ -3830,24 +3833,36 @@
             let currentYear = startD.getFullYear();
             const currentTodayYear = today.getFullYear();
             
+            // Define o ano mínimo para exibir os ciclos vazios
+            let minDisplayYear = currentYear;
+            if (emp.createdAt) {
+                const createdYear = new Date(emp.createdAt).getFullYear();
+                // -2 para garantir que o ciclo cuja data limite vence neste ano atual seja gerado
+                minDisplayYear = Math.max(currentYear, createdYear - 2); 
+            } else {
+                minDisplayYear = Math.max(currentYear, currentTodayYear - 2);
+            }
+            
             while (currentYear <= currentTodayYear + 1) {
-              const startAq = new Date(currentYear, startD.getMonth(), startD.getDate());
-              const endAq = new Date(currentYear + 1, startD.getMonth(), startD.getDate() - 1);
-              const canTake = new Date(currentYear + 1, startD.getMonth() + 1, startD.getDate() - 1);
-              const limit = new Date(currentYear + 2, startD.getMonth() + 1, startD.getDate() - 1);
-
               const cycleId = `${currentYear}-${currentYear+1}`;
               const dbData = emp.vacations?.[cycleId] || {};
 
-              allCycles.push({
-                emp,
-                cycleId,
-                startAqStr: startAq.toLocaleDateString('pt-BR'),
-                endAqStr: endAq.toLocaleDateString('pt-BR'),
-                canTakeStr: canTake.toLocaleDateString('pt-BR'),
-                limitStr: limit.toLocaleDateString('pt-BR'),
-                dbData
-              });
+              if (currentYear >= minDisplayYear || Object.keys(dbData).length > 0) {
+                  const startAq = new Date(currentYear, startD.getMonth(), startD.getDate());
+                  const endAq = new Date(currentYear + 1, startD.getMonth(), startD.getDate() - 1);
+                  const canTake = new Date(currentYear + 1, startD.getMonth() + 1, startD.getDate() - 1);
+                  const limit = new Date(currentYear + 2, startD.getMonth() + 1, startD.getDate() - 1);
+
+                  allCycles.push({
+                    emp,
+                    cycleId,
+                    startAqStr: startAq.toLocaleDateString('pt-BR'),
+                    endAqStr: endAq.toLocaleDateString('pt-BR'),
+                    canTakeStr: canTake.toLocaleDateString('pt-BR'),
+                    limitStr: limit.toLocaleDateString('pt-BR'),
+                    dbData
+                  });
+              }
               currentYear++;
             }
           });
@@ -3866,7 +3881,6 @@
             return localEdits[uniqueId]?.[field] !== undefined ? localEdits[uniqueId][field] : (cycle.dbData[field] || def);
           };
 
-          // Lógica principal para salvar Férias (Adicionada flag de conferência e autor)
           const handleSaveCycle = async (empId, cycleId, uniqueId, isConfirming = false) => {
             if (!canWrite) return;
             
@@ -3882,8 +3896,8 @@
               observations: currentData.observations !== undefined ? currentData.observations : (existingDbData.observations || ''),
               status: currentData.status !== undefined ? currentData.status : (existingDbData.status || 'Aguardando'),
               confirmed: isConfirming ? true : (existingDbData.confirmed || false),
-              verified: false, // FLAG DE CONFERÊNCIA
-              lastModifiedBy: appUser.username // AUTOR DA ALTERAÇÃO
+              verified: false,
+              lastModifiedBy: appUser.username
             };
 
             if (isConfirming && (!payload.startDate || !payload.endDate)) {
@@ -3909,7 +3923,6 @@
             }
           };
 
-          // Lógica de conferência dupla de férias
           const handleVerifyVacation = async (empId, cycleId, empName, lastModifiedBy) => {
             if (lastModifiedBy === appUser.username) {
                showToast("A conferência de segurança deve ser realizada por outro utilizador.", "error"); return;
@@ -3964,12 +3977,50 @@
              let matchMonth = true;
              let matchYear = true;
 
-             if ((activeSubTab === 'programacao' || activeSubTab === 'historico') && c.dbData.startDate) {
-                const [d, m, y] = c.dbData.startDate.split('/');
-                if (filterMonth !== 'all') matchMonth = m === filterMonth;
-                if (filterYear !== 'all') matchYear = y === filterYear;
-             } else if ((activeSubTab === 'programacao' || activeSubTab === 'historico') && !c.dbData.startDate) {
-                if (filterMonth !== 'all' || filterYear !== 'all') return false;
+             if (activeSubTab === 'programacao' || activeSubTab === 'historico') {
+                if (c.dbData.startDate) {
+                   const [sD, sM, sY] = c.dbData.startDate.split('/');
+                   let eM = sM, eY = sY;
+                   
+                   if (c.dbData.endDate) {
+                       const eParts = c.dbData.endDate.split('/');
+                       if (eParts.length === 3) {
+                           eM = eParts[1];
+                           eY = eParts[2];
+                       }
+                   }
+                   
+                   let isInStart = true;
+                   let isInEnd = true;
+                   
+                   if (filterYear !== 'all') {
+                       isInStart = (sY === filterYear);
+                       isInEnd = (eY === filterYear);
+                   }
+                   if (filterMonth !== 'all') {
+                       isInStart = isInStart && (sM === filterMonth);
+                       isInEnd = isInEnd && (eM === filterMonth);
+                   }
+                   
+                   if (filterYear !== 'all' || filterMonth !== 'all') {
+                       matchYear = isInStart || isInEnd;
+                       matchMonth = isInStart || isInEnd;
+                   }
+                } else if (activeSubTab === 'historico') {
+                   matchMonth = false;
+                   matchYear = false;
+                } else {
+                   const limitYear = c.limitStr.split('/')[2];
+                   if (filterYear !== 'all') {
+                       matchYear = (limitYear === filterYear);
+                   }
+                   matchMonth = true;
+                }
+             }
+
+             if (searchTerm.trim() !== '') {
+                matchMonth = true;
+                matchYear = true;
              }
 
              return matchSearch && matchDept && matchUnit && matchSector && matchStatus && matchMonth && matchYear;
@@ -4074,7 +4125,7 @@
               </Card>
 
               <Card className="p-2 relative z-10">
-                <div className="overflow-x-auto custom-scrollbar">
+                <div className="overflow-x-auto custom-scrollbar pb-24">
                   <table className="w-full text-left border-collapse min-w-[1400px]">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
@@ -4161,22 +4212,43 @@
                                    onChange={e => handleLocalChange(uniqueId, 'preference', e.target.value)}
                                  />
                                </div>
-                               <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                                 <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">Venda?</span>
-                                 <select 
+
+                               <div className="relative">
+                                 <button 
+                                   type="button"
                                    disabled={confirmed || !canWrite}
-                                   className={`flex-1 bg-transparent text-xs outline-none cursor-pointer disabled:opacity-50`}
-                                   value={getVal(uniqueId, c, 'sold', 'Não')}
-                                   onChange={e => handleLocalChange(uniqueId, 'sold', e.target.value)}
+                                   onClick={() => setOpenDropdown(openDropdown === `${uniqueId}-sold` ? null : `${uniqueId}-sold`)}
+                                   className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between shadow-sm`}
                                  >
-                                   <option value="Não">Não</option>
-                                   <option value="Sim">Sim</option>
-                                 </select>
+                                   <span className="truncate">{getVal(uniqueId, c, 'sold', 'Não') === 'Sim' ? 'Venda: Sim' : 'Venda: Não'}</span>
+                                   <ChevronDown size={14} className={`absolute right-2.5 text-slate-400 transition-transform ${openDropdown === `${uniqueId}-sold` ? 'rotate-180' : ''}`} />
+                                 </button>
+                                 
+                                 {openDropdown === `${uniqueId}-sold` && (
+                                   <>
+                                     <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)}></div>
+                                     <div className="absolute top-[100%] left-0 min-w-full mt-1 z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                       <div className="p-1 space-y-0.5">
+                                         {['Não', 'Sim'].map(opt => (
+                                            <button
+                                              key={opt}
+                                              type="button"
+                                              onClick={() => { handleLocalChange(uniqueId, 'sold', opt); setOpenDropdown(null); }}
+                                              className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${getVal(uniqueId, c, 'sold', 'Não') === opt ? `${theme.lightBg} ${theme.text} font-bold` : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                                            >
+                                              Venda: {opt}
+                                            </button>
+                                         ))}
+                                       </div>
+                                     </div>
+                                   </>
+                                 )}
                                </div>
+
                                {getVal(uniqueId, c, 'sold') === 'Sim' && (
                                  <input 
                                    type="number" placeholder="Qtd. Dias Vendidos" disabled={confirmed || !canWrite}
-                                   className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-700/50 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50`}
+                                   className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-700/50 rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent focus:ring-amber-500 text-slate-900 dark:text-white disabled:opacity-50`}
                                    value={getVal(uniqueId, c, 'soldDays')}
                                    onChange={e => handleLocalChange(uniqueId, 'soldDays', e.target.value)}
                                  />
@@ -4184,22 +4256,42 @@
                             </td>
 
                             <td className="p-3 align-top space-y-2">
-                               <select 
-                                 disabled={confirmed || !canWrite}
-                                 className={`w-full px-2.5 py-1.5 text-xs font-bold uppercase rounded-lg outline-none border focus:ring-2 ${theme.ring} disabled:opacity-50 ${
-                                   getVal(uniqueId, c, 'status') === 'Aguardando' ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' :
-                                   getVal(uniqueId, c, 'status') === 'Aviso Entregue' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800' :
-                                   getVal(uniqueId, c, 'status') === 'Finalizado' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800' :
-                                   'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800'
-                                 }`}
-                                 value={getVal(uniqueId, c, 'status', 'Aguardando')}
-                                 onChange={e => handleLocalChange(uniqueId, 'status', e.target.value)}
-                               >
-                                 <option value="Aguardando">Aguardando</option>
-                                 <option value="Aviso Entregue">Aviso Entregue</option>
-                                 <option value="Venda">Venda</option>
-                                 <option value="Finalizado">Finalizado</option>
-                               </select>
+                               <div className="relative">
+                                 <button 
+                                   type="button"
+                                   disabled={confirmed || !canWrite}
+                                   onClick={() => setOpenDropdown(openDropdown === `${uniqueId}-status` ? null : `${uniqueId}-status`)}
+                                   className={`w-full px-2.5 py-1.5 text-xs font-bold rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between border shadow-sm ${
+                                     getVal(uniqueId, c, 'status', 'Aguardando') === 'Aguardando' ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:ring-slate-500' :
+                                     getVal(uniqueId, c, 'status', 'Aguardando') === 'Aviso Entregue' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 focus:ring-blue-500' :
+                                     getVal(uniqueId, c, 'status', 'Aguardando') === 'Finalizado' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 focus:ring-emerald-500' :
+                                     'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 focus:ring-amber-500'
+                                   }`}
+                                 >
+                                   <span className="truncate">Status: {getVal(uniqueId, c, 'status', 'Aguardando')}</span>
+                                   <ChevronDown size={14} className={`absolute right-2.5 transition-transform opacity-60 ${openDropdown === `${uniqueId}-status` ? 'rotate-180' : ''}`} />
+                                 </button>
+
+                                 {openDropdown === `${uniqueId}-status` && (
+                                   <>
+                                     <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)}></div>
+                                     <div className="absolute top-[100%] right-0 min-w-full mt-1 z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                       <div className="p-1 space-y-0.5">
+                                         {['Aguardando', 'Aviso Entregue', 'Venda', 'Finalizado'].map(opt => (
+                                            <button
+                                              key={opt}
+                                              type="button"
+                                              onClick={() => { handleLocalChange(uniqueId, 'status', opt); setOpenDropdown(null); }}
+                                              className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${getVal(uniqueId, c, 'status', 'Aguardando') === opt ? `${theme.lightBg} ${theme.text} font-bold` : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                                            >
+                                              {opt}
+                                            </button>
+                                         ))}
+                                       </div>
+                                     </div>
+                                   </>
+                                 )}
+                               </div>
 
                                <textarea 
                                  placeholder="Observações..." disabled={confirmed || !canWrite} rows="2"
