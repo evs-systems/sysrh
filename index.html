@@ -3782,15 +3782,20 @@
 
           const canWrite = appUser?.permissions?.vacations?.write || appUser?.sector === 'Administração';
 
+          // Listener inteligente: fecha o menu se rolar a página ou clicar fora, ignorando o próprio botão
           useEffect(() => {
-            const handleClose = () => setDropdownState(null);
+            const handleScroll = () => setDropdownState(null);
+            const handleMouseDown = (e) => {
+              if (e.target.closest('.vacations-dropdown-btn')) return;
+              setDropdownState(null);
+            };
             if (dropdownState) {
-              window.addEventListener('scroll', handleClose, true);
-              document.addEventListener('mousedown', handleClose);
+              window.addEventListener('scroll', handleScroll, true);
+              document.addEventListener('mousedown', handleMouseDown);
             }
             return () => {
-              window.removeEventListener('scroll', handleClose, true);
-              document.removeEventListener('mousedown', handleClose);
+              window.removeEventListener('scroll', handleScroll, true);
+              document.removeEventListener('mousedown', handleMouseDown);
             };
           }, [dropdownState]);
 
@@ -3798,10 +3803,12 @@
             e.preventDefault();
             e.stopPropagation();
             const id = `${uniqueId}-${field}`;
+            
             if (dropdownState?.id === id) {
               setDropdownState(null);
               return;
             }
+            
             const btnRect = e.currentTarget.getBoundingClientRect();
             const cardEl = e.currentTarget.closest('.vacations-table-card');
             if (cardEl) {
@@ -4116,7 +4123,7 @@
                       <input 
                         type="text" 
                         placeholder="Nome..." 
-                        className={`w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white`}
+                        className={`w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white backdrop-blur-sm`}
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                       />
@@ -4131,14 +4138,14 @@
 
               <Card className="p-2 relative z-10 vacations-table-card">
                 <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse min-w-[1400px]">
+                  <table className="w-full text-left border-collapse min-w-[1200px]">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
                         <th className="p-3 font-medium min-w-[180px]">Colaborador</th>
                         <th className="p-3 font-medium min-w-[200px]">Prazos (Aquisitivo / Limite)</th>
-                        <th className="p-3 font-medium min-w-[220px]">Programação de Datas</th>
-                        <th className="p-3 font-medium min-w-[160px]">Preferência & Venda</th>
-                        <th className="p-3 font-medium min-w-[160px]">Status / Observações</th>
+                        <th className="p-3 font-medium min-w-[140px]">Programação de Datas</th>
+                        <th className="p-3 font-medium min-w-[140px]">Preferência & Venda</th>
+                        <th className="p-3 font-medium min-w-[180px]">Status / Observações</th>
                         {canWrite && <th className="p-3 font-medium text-center min-w-[150px]">Ações</th>}
                       </tr>
                     </thead>
@@ -4156,7 +4163,7 @@
                         };
 
                         return (
-                          <tr key={uniqueId} className={`border-b border-slate-100 dark:border-slate-800/50 transition-colors ${confirmed ? 'bg-emerald-50/30 dark:bg-emerald-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}>
+                          <tr key={uniqueId} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="p-3 align-top">
                               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2 truncate">
                                 {c.emp.name}
@@ -4185,8 +4192,8 @@
                             </td>
 
                             <td className="p-3 align-top space-y-2">
-                               <div className="flex gap-2">
-                                  <div className="flex-1">
+                               <div className="flex flex-col gap-2">
+                                  <div className="w-[110px]">
                                     <label className="text-[10px] font-bold text-slate-500 ml-1">Início</label>
                                     <input 
                                       type="text" placeholder="DD/MM/AAAA" disabled={confirmed || !canWrite}
@@ -4195,7 +4202,7 @@
                                       onChange={e => handleLocalChange(uniqueId, 'startDate', formatDt(e.target.value))}
                                     />
                                   </div>
-                                  <div className="flex-1">
+                                  <div className="w-[110px]">
                                     <label className="text-[10px] font-bold text-slate-500 ml-1">Retorno</label>
                                     <input 
                                       type="text" placeholder="DD/MM/AAAA" disabled={confirmed || !canWrite}
@@ -4208,61 +4215,70 @@
                             </td>
 
                             <td className="p-3 align-top space-y-2">
-                               <div>
+                               <div className="flex flex-col gap-1">
+                                 <label className="text-[10px] font-bold text-slate-500 ml-1">Pref. de Mês</label>
                                  <input 
-                                   type="text" placeholder="Pref. de mês..." disabled={confirmed || !canWrite}
+                                   type="text" placeholder="Ex: Janeiro..." disabled={confirmed || !canWrite}
                                    className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} disabled:opacity-50`}
                                    value={getVal(uniqueId, c, 'preference')}
                                    onChange={e => handleLocalChange(uniqueId, 'preference', e.target.value)}
                                  />
                                </div>
 
-                               <div className="relative">
+                               <div className="relative flex flex-col gap-1">
+                                 <label className="text-[10px] font-bold text-slate-500 ml-1">Vender Dias?</label>
                                  <button 
                                    type="button"
                                    disabled={confirmed || !canWrite}
-                                   onClick={(e) => toggleDropdown(e, uniqueId, 'sold', getVal(uniqueId, c, 'sold', 'Não'), ['Não', 'Sim'], (opt) => `Venda: ${opt}`)}
-                                   className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between shadow-sm`}
+                                   onClick={(e) => toggleDropdown(e, uniqueId, 'sold', getVal(uniqueId, c, 'sold', 'Não'), ['Não', 'Sim'], (opt) => opt)}
+                                   className={`vacations-dropdown-btn w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between shadow-sm`}
                                  >
-                                   <span className="truncate">{getVal(uniqueId, c, 'sold', 'Não') === 'Sim' ? 'Venda: Sim' : 'Venda: Não'}</span>
+                                   <span className="truncate">{getVal(uniqueId, c, 'sold', 'Não')}</span>
                                    <ChevronDown size={14} className={`absolute right-2.5 text-slate-400 transition-transform ${dropdownState?.id === `${uniqueId}-sold` ? 'rotate-180' : ''}`} />
                                  </button>
                                </div>
 
                                {getVal(uniqueId, c, 'sold') === 'Sim' && (
-                                 <input 
-                                   type="number" placeholder="Qtd. Dias Vendidos" disabled={confirmed || !canWrite}
-                                   className={`w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-700/50 rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent focus:ring-amber-500 text-slate-900 dark:text-white disabled:opacity-50`}
-                                   value={getVal(uniqueId, c, 'soldDays')}
-                                   onChange={e => handleLocalChange(uniqueId, 'soldDays', e.target.value)}
-                                 />
+                                 <div className="flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+                                   <label className="text-[10px] font-bold text-amber-600 dark:text-amber-500 ml-1">Qtd. Vendida</label>
+                                   <input 
+                                     type="number" placeholder="Ex: 10" disabled={confirmed || !canWrite}
+                                     className={`w-full px-2.5 py-1.5 text-xs bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/50 rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent focus:ring-amber-500 text-amber-900 dark:text-amber-100 disabled:opacity-50`}
+                                     value={getVal(uniqueId, c, 'soldDays')}
+                                     onChange={e => handleLocalChange(uniqueId, 'soldDays', e.target.value)}
+                                   />
+                                 </div>
                                )}
                             </td>
 
                             <td className="p-3 align-top space-y-2">
-                               <div className="relative">
+                               <div className="relative flex flex-col gap-1">
+                                 <label className="text-[10px] font-bold text-slate-500 ml-1">Status</label>
                                  <button 
                                    type="button"
                                    disabled={confirmed || !canWrite}
                                    onClick={(e) => toggleDropdown(e, uniqueId, 'status', getVal(uniqueId, c, 'status', 'Aguardando'), ['Aguardando', 'Aviso Entregue', 'Venda', 'Finalizado'], (opt) => opt)}
-                                   className={`w-full px-2.5 py-1.5 text-xs font-bold rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between border shadow-sm ${
+                                   className={`vacations-dropdown-btn w-full px-2.5 py-1.5 text-xs font-bold rounded-lg outline-none transition-all focus:ring-2 focus:border-transparent cursor-pointer disabled:opacity-50 pr-8 flex items-center justify-between border shadow-sm ${
                                      getVal(uniqueId, c, 'status', 'Aguardando') === 'Aguardando' ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:ring-slate-500' :
                                      getVal(uniqueId, c, 'status', 'Aguardando') === 'Aviso Entregue' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 focus:ring-blue-500' :
                                      getVal(uniqueId, c, 'status', 'Aguardando') === 'Finalizado' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 focus:ring-emerald-500' :
                                      'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 focus:ring-amber-500'
                                    }`}
                                  >
-                                   <span className="truncate">Status: {getVal(uniqueId, c, 'status', 'Aguardando')}</span>
+                                   <span className="truncate">{getVal(uniqueId, c, 'status', 'Aguardando')}</span>
                                    <ChevronDown size={14} className={`absolute right-2.5 transition-transform opacity-60 ${dropdownState?.id === `${uniqueId}-status` ? 'rotate-180' : ''}`} />
                                  </button>
                                </div>
 
-                               <textarea 
-                                 placeholder="Observações..." disabled={confirmed || !canWrite} rows="2"
-                                 className={`w-full px-2.5 py-1.5 text-[11px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} resize-none disabled:opacity-50 custom-scrollbar`}
-                                 value={getVal(uniqueId, c, 'observations')}
-                                 onChange={e => handleLocalChange(uniqueId, 'observations', e.target.value)}
-                               />
+                               <div className="flex flex-col gap-1 mt-2">
+                                 <label className="text-[10px] font-bold text-slate-500 ml-1">Observações</label>
+                                 <textarea 
+                                   placeholder="Detalhes adicionais..." disabled={confirmed || !canWrite} rows="2"
+                                   className={`w-full px-2.5 py-1.5 text-[11px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 ${theme.ring} resize-none disabled:opacity-50 custom-scrollbar`}
+                                   value={getVal(uniqueId, c, 'observations')}
+                                   onChange={e => handleLocalChange(uniqueId, 'observations', e.target.value)}
+                                 />
+                               </div>
                             </td>
 
                             {canWrite && (
@@ -4297,6 +4313,7 @@
                   </table>
                 </div>
 
+                {/* Popover Absoluto com animação Hover igual aos Colaboradores */}
                 {dropdownState && (
                   <div 
                     className="absolute z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
@@ -4313,7 +4330,7 @@
                               handleLocalChange(dropdownState.uniqueId, dropdownState.field, opt);
                               setDropdownState(null);
                           }}
-                          className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${dropdownState.currentVal === opt ? `${theme.lightBg} ${theme.text} font-bold` : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                          className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-all duration-200 ${dropdownState.currentVal === opt ? `${theme.lightBg} ${theme.text} font-bold shadow-sm` : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:pl-5'}`}
                         >
                           {dropdownState.renderLabel(opt)}
                         </button>
