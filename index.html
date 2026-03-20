@@ -3782,7 +3782,7 @@
 
           const canWrite = appUser?.permissions?.vacations?.write || appUser?.sector === 'Administração';
 
-          // Listener inteligente: fecha o menu se rolar a página ou clicar fora, ignorando o próprio botão
+          // Listener inteligente: fecha o menu se rolar a página ou clicar fora
           useEffect(() => {
             const handleScroll = () => setDropdownState(null);
             const handleMouseDown = (e) => {
@@ -3874,25 +3874,80 @@
             while (currentYear <= currentTodayYear + 1) {
               const cycleId = `${currentYear}-${currentYear+1}`;
               const dbData = emp.vacations?.[cycleId] || {};
+              
+              // Busca partes fracionadas vinculadas a este ciclo
+              const partsKeys = Object.keys(emp.vacations || {}).filter(k => k.startsWith(`${cycleId}_p`));
 
-              if (currentYear >= minDisplayYear || Object.keys(dbData).length > 0) {
+              if (currentYear >= minDisplayYear || Object.keys(dbData).length > 0 || partsKeys.length > 0) {
                   const startAq = new Date(currentYear, startD.getMonth(), startD.getDate());
                   const endAq = new Date(currentYear + 1, startD.getMonth(), startD.getDate());
-                  
-                  // Pode tirar a partir do mês seguinte (+1) ao final do período aquisitivo
                   const canTake = new Date(currentYear + 1, startD.getMonth() + 1, startD.getDate());
-                  // O limite passa a ser exatamente 1 ano depois (+2 no ano) do mês em que pode começar a tirar (+1 no mês)
                   const limit = new Date(currentYear + 2, startD.getMonth() + 1, startD.getDate());
 
-                  allCycles.push({
-                    emp,
-                    cycleId,
-                    startAqStr: startAq.toLocaleDateString('pt-BR'),
-                    endAqStr: endAq.toLocaleDateString('pt-BR'),
-                    canTakeStr: canTake.toLocaleDateString('pt-BR'),
-                    limitStr: limit.toLocaleDateString('pt-BR'),
-                    dbData
+                  const startAqStr = startAq.toLocaleDateString('pt-BR');
+                  const endAqStr = endAq.toLocaleDateString('pt-BR');
+                  const canTakeStr = canTake.toLocaleDateString('pt-BR');
+                  const limitStr = limit.toLocaleDateString('pt-BR');
+
+                  // Conta dias já utilizados
+                  let usedDays = 0;
+                  const parts = partsKeys.map(k => emp.vacations[k]);
+                  
+                  parts.forEach(p => {
+                      const s = parseDate(p.startDate); const e = parseDate(p.endDate);
+                      if (s && e) usedDays += Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
                   });
+
+                  let legacyPart = null;
+                  if (dbData.confirmed && parts.length === 0 && dbData.startDate) {
+                      const s = parseDate(dbData.startDate); const e = parseDate(dbData.endDate);
+                      if (s && e) {
+                          usedDays += Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
+                          legacyPart = { startDate: dbData.startDate, endDate: dbData.endDate, confirmedDate: dbData.confirmedDate };
+                      }
+                  }
+
+                  const sold = dbData.sold || 'Não';
+                  const soldDays = sold === 'Sim' ? Number(dbData.soldDays || 0) : 0;
+                  const isSoldAll = sold === 'Sim' && soldDays === 30;
+                  
+                  const remainingDays = isSoldAll ? 0 : Math.max(0, 30 - soldDays - usedDays);
+                  const isFullyConfirmed = dbData.confirmed || remainingDays === 0;
+
+                  // 1. Gera linha para cada parte confirmada (Vai para o Histórico ou Atuais)
+                  if (legacyPart) {
+                      allCycles.push({
+                          emp, cycleId, partIndex: 0, isPart: true,
+                          startAqStr, endAqStr, canTakeStr, limitStr,
+                          dbData: { ...dbData, ...legacyPart, confirmed: true },
+                          partDays: usedDays
+                      });
+                  } else {
+                      parts.forEach((p, idx) => {
+                          const pDays = Math.ceil((parseDate(p.endDate).getTime() - parseDate(p.startDate).getTime()) / 86400000) + 1;
+                          allCycles.push({
+                              emp, cycleId, partIndex: idx + 1, isPart: true,
+                              startAqStr, endAqStr, canTakeStr, limitStr,
+                              dbData: { ...dbData, startDate: p.startDate, endDate: p.endDate, confirmedDate: p.confirmedDate, confirmed: true },
+                              partDays: pDays
+                          });
+                      });
+                  }
+
+                  // 2. Se houver saldo, gera a linha de Programação (Aguardando Configuração)
+                  if (!isFullyConfirmed) {
+                      allCycles.push({
+                          emp, cycleId, partIndex: -1, isPart: false,
+                          startAqStr, endAqStr, canTakeStr, limitStr, remainingDays,
+                          dbData 
+                      });
+                  } else if (isSoldAll && parts.length === 0 && !legacyPart) {
+                      allCycles.push({
+                          emp, cycleId, partIndex: 0, isPart: true, isSoldAll: true,
+                          startAqStr, endAqStr, canTakeStr, limitStr,
+                          dbData: { ...dbData, confirmed: true }
+                      });
+                  }
               }
               currentYear++;
             }
@@ -3916,43 +3971,125 @@
             if (!canWrite) return;
             
             const currentData = localEdits[uniqueId] || {};
-            const existingDbData = employees.find(e => e.id === empId)?.vacations?.[cycleId] || {};
+            const vacationsObj = employees.find(e => e.id === empId)?.vacations || {};
+            const existingDbData = vacationsObj[cycleId] || {};
             
-            // NOVA LÓGICA: Captura a data exata da confirmação para fixar o registro no histórico
+            // Reavalia o consumo de dias para bloquear a programação indevida
+            const partsKeys = Object.keys(vacationsObj).filter(k => k.startsWith(`${cycleId}_p`));
+            let usedDays = 0;
+            partsKeys.forEach(k => {
+                const p = vacationsObj[k];
+                const s = parseDate(p.startDate); const e = parseDate(p.endDate);
+                if (s && e) usedDays += Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
+            });
+            
+            if (existingDbData.confirmed && partsKeys.length === 0 && existingDbData.startDate) {
+                const s = parseDate(existingDbData.startDate); const e = parseDate(existingDbData.endDate);
+                if (s && e) usedDays += Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
+            }
+
+            const sold = currentData.sold !== undefined ? currentData.sold : (existingDbData.sold || 'Não');
+            const soldDays = currentData.soldDays !== undefined ? currentData.soldDays : (existingDbData.soldDays || '');
+            const numSoldDays = sold === 'Sim' ? Number(soldDays || 0) : 0;
+            
+            let remainingDays = 30 - numSoldDays - usedDays;
+
             let confirmedDate = existingDbData.confirmedDate || '';
             if (isConfirming && !existingDbData.confirmed) {
                  const todayObj = new Date();
                  confirmedDate = `${String(todayObj.getDate()).padStart(2, '0')}/${String(todayObj.getMonth() + 1).padStart(2, '0')}/${todayObj.getFullYear()}`;
             }
 
-            const payload = {
+            const payloadMain = {
               preference: currentData.preference !== undefined ? currentData.preference : (existingDbData.preference || ''),
-              sold: currentData.sold !== undefined ? currentData.sold : (existingDbData.sold || 'Não'),
-              soldDays: currentData.soldDays !== undefined ? currentData.soldDays : (existingDbData.soldDays || ''),
-              startDate: currentData.startDate !== undefined ? currentData.startDate : (existingDbData.startDate || ''),
-              endDate: currentData.endDate !== undefined ? currentData.endDate : (existingDbData.endDate || ''),
+              sold,
+              soldDays,
               observations: currentData.observations !== undefined ? currentData.observations : (existingDbData.observations || ''),
               status: currentData.status !== undefined ? currentData.status : (existingDbData.status || 'Aguardando'),
-              confirmed: isConfirming ? true : (existingDbData.confirmed || false),
+              startDate: currentData.startDate !== undefined ? currentData.startDate : (existingDbData.startDate || ''),
+              endDate: currentData.endDate !== undefined ? currentData.endDate : (existingDbData.endDate || ''),
+              confirmed: existingDbData.confirmed || false,
               confirmedDate: confirmedDate,
               lastModifiedBy: appUser.username
             };
 
-            // Se vendeu 30 dias, as datas são desconsideradas e zeradas. Caso contrário, exige datas na confirmação.
-            if (payload.sold === 'Sim' && String(payload.soldDays) === '30') {
-                payload.startDate = '';
-                payload.endDate = '';
-            } else if (isConfirming && (!payload.startDate || !payload.endDate)) {
-                showToast('Preencha a data de Início e Retorno para confirmar as férias.', 'error');
-                return;
+            // NOVA LÓGICA DE BLOQUEIO: Impede de salvar ou configurar férias que ultrapassem o saldo
+            if (payloadMain.startDate && payloadMain.endDate && !(payloadMain.sold === 'Sim' && String(payloadMain.soldDays) === '30')) {
+                const s = parseDate(payloadMain.startDate);
+                const e = parseDate(payloadMain.endDate);
+                if (s && e && e >= s) {
+                    const reqDays = Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
+                    if (reqDays > remainingDays) {
+                        showToast(`Quantidade inválida: O período digitado (${reqDays} dias) excede o saldo que o colaborador possui (${remainingDays} dias).`, 'error');
+                        return; // Bloqueia e impede de salvar
+                    }
+                } else if (s && e && e < s) {
+                    showToast('A data de retorno deve ser posterior ou igual à data de início.', 'error');
+                    return; // Bloqueia e impede de salvar
+                }
+            }
+
+            let newPartKey = null;
+            let newPartPayload = null;
+
+            if (payloadMain.sold === 'Sim' && String(payloadMain.soldDays) === '30') {
+                payloadMain.startDate = '';
+                payloadMain.endDate = '';
+                if (isConfirming) {
+                    payloadMain.confirmed = true;
+                    payloadMain.confirmedDate = new Date().toLocaleDateString('pt-BR');
+                }
+            } else if (isConfirming) {
+                if (!payloadMain.startDate || !payloadMain.endDate) {
+                    showToast('Preencha a data de Início e Retorno para confirmar.', 'error'); return;
+                }
+                const s = parseDate(payloadMain.startDate);
+                const e = parseDate(payloadMain.endDate);
+                
+                if (s && e && e >= s) {
+                    const reqDays = Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
+                    if (reqDays > remainingDays) {
+                        showToast(`Quantidade de dias solicitada (${reqDays}) excede o saldo restante (${remainingDays}).`, 'error'); return;
+                    }
+                    
+                    remainingDays -= reqDays;
+                    
+                    if (partsKeys.length === 0 && remainingDays === 0) {
+                        // Consumiu tudo no primeiro lançamento
+                        payloadMain.confirmed = true;
+                        payloadMain.confirmedDate = new Date().toLocaleDateString('pt-BR');
+                    } else {
+                        // Parcial, cria uma entrada filha independente!
+                        newPartKey = `${cycleId}_p${Date.now()}`;
+                        newPartPayload = {
+                            startDate: payloadMain.startDate,
+                            endDate: payloadMain.endDate,
+                            confirmed: true,
+                            confirmedDate: new Date().toLocaleDateString('pt-BR'),
+                            isPartialPart: true
+                        };
+                        payloadMain.startDate = '';
+                        payloadMain.endDate = '';
+                        if (remainingDays === 0) {
+                            payloadMain.confirmed = true;
+                        }
+                    }
+                } else {
+                    showToast('Datas inválidas.', 'error'); return;
+                }
             }
 
             const executeSave = async () => {
               try {
-                await updateDoc(doc(db, `${basePath}/employees/${empId}`), {
-                  [`vacations.${cycleId}`]: payload,
-                  lastModifiedBy: appUser.username
-                });
+                let updates = {
+                    [`vacations.${cycleId}`]: payloadMain,
+                    lastModifiedBy: appUser.username
+                };
+                if (newPartKey && newPartPayload) {
+                    updates[`vacations.${newPartKey}`] = newPartPayload;
+                }
+
+                await updateDoc(doc(db, `${basePath}/employees/${empId}`), updates);
                 logAction(isConfirming ? 'Confirmação' : 'Atualização', 'Férias', `${isConfirming ? 'Confirmou' : 'Atualizou'} férias de ${employees.find(e=>e.id===empId)?.name} (Aquisitivo: ${cycleId})`);
                 showToast(isConfirming ? 'Férias confirmadas e travadas com sucesso!' : 'Planejamento de férias salvo!');
                 
@@ -3983,26 +4120,23 @@
              let isCurrent = false;
              let isHistory = false;
              
-             if (startT && endT) {
-               if (todayTime >= startT && todayTime <= endT) isCurrent = true;
-               if (todayTime > endT) isHistory = true;
-             }
-
-             if (c.dbData.confirmed && isHistory) {
-                 isHistory = true;
-             } else if (c.dbData.status === 'Finalizado') {
-                 isHistory = true;
-             } else if (c.dbData.confirmed && isSoldAll) {
-                 isHistory = true; // Move "Vendeu todos os dias" confirmado direto pro Histórico
-             }
-
-             if (activeSubTab === 'atuais') {
-               return isCurrent;
-             } else if (activeSubTab === 'historico') {
-               return isHistory;
+             // Filtra de forma inteligente se a parte é histórica, atual ou futura
+             if (c.isPart || c.isSoldAll) {
+                 if (startT && endT) {
+                   if (todayTime >= startT && todayTime <= endT) {
+                       isCurrent = true;
+                   } else if (todayTime > endT) {
+                       isHistory = true; // Só move pro histórico se a data de hoje for MAIOR que o retorno
+                   }
+                 }
+                 if (isSoldAll) isHistory = true;
              } else {
-               return !isCurrent && !isHistory;
+                 if (c.dbData.status === 'Finalizado') isHistory = true;
              }
+
+             if (activeSubTab === 'atuais') return isCurrent;
+             if (activeSubTab === 'historico') return isHistory;
+             return !isCurrent && !isHistory;
           });
 
           filteredCycles = filteredCycles.filter(c => {
@@ -4016,16 +4150,22 @@
              let matchYear = true;
 
              if (activeSubTab === 'programacao' || activeSubTab === 'historico') {
-                if (c.dbData.startDate) {
+                if (c.isSoldAll) {
+                   if (c.dbData.confirmedDate) {
+                       const [cD, cM, cY] = c.dbData.confirmedDate.split('/');
+                       if (filterYear !== 'all') matchYear = (cY === filterYear);
+                       if (filterMonth !== 'all') matchMonth = (cM === filterMonth);
+                   } else {
+                       const limitYear = c.limitStr.split('/')[2];
+                       if (filterYear !== 'all') matchYear = (limitYear === filterYear);
+                       matchMonth = true;
+                   }
+                } else if (c.isPart || c.dbData.startDate) {
                    const [sD, sM, sY] = c.dbData.startDate.split('/');
                    let eM = sM, eY = sY;
-                   
                    if (c.dbData.endDate) {
                        const eParts = c.dbData.endDate.split('/');
-                       if (eParts.length === 3) {
-                           eM = eParts[1];
-                           eY = eParts[2];
-                       }
+                       if (eParts.length === 3) { eM = eParts[1]; eY = eParts[2]; }
                    }
                    
                    let isInStart = true;
@@ -4043,24 +4183,6 @@
                    if (filterYear !== 'all' || filterMonth !== 'all') {
                        matchYear = isInStart || isInEnd;
                        matchMonth = isInStart || isInEnd;
-                   }
-                } else if (activeSubTab === 'historico') {
-                   const isSoldAll = c.dbData.sold === 'Sim' && String(c.dbData.soldDays) === '30';
-                   if (isSoldAll) {
-                       // NOVO: Usa a data de confirmação salva para exibir exatamente no mês em que foi vendido!
-                       if (c.dbData.confirmedDate) {
-                           const [cD, cM, cY] = c.dbData.confirmedDate.split('/');
-                           if (filterYear !== 'all') matchYear = (cY === filterYear);
-                           if (filterMonth !== 'all') matchMonth = (cM === filterMonth);
-                       } else {
-                           // Fallback se não houver data salva
-                           const limitYear = c.limitStr.split('/')[2];
-                           if (filterYear !== 'all') matchYear = (limitYear === filterYear);
-                           matchMonth = true;
-                       }
-                   } else {
-                       matchMonth = false;
-                       matchYear = false;
                    }
                 } else {
                    const limitYear = c.limitStr.split('/')[2];
@@ -4092,7 +4214,7 @@
             ];
             
             const rows = filteredCycles.map(c => {
-              const uniqueId = `${c.emp.id}-${c.cycleId}`;
+              const uniqueId = `${c.emp.id}-${c.cycleId}-p${c.partIndex}`;
               const start = getVal(uniqueId, c, 'startDate');
               const end = getVal(uniqueId, c, 'endDate');
               const pref = getVal(uniqueId, c, 'preference');
@@ -4192,8 +4314,8 @@
                     </thead>
                     <tbody>
                       {displayedList.map(c => {
-                        const uniqueId = `${c.emp.id}-${c.cycleId}`;
-                        const confirmed = c.dbData.confirmed;
+                        const uniqueId = `${c.emp.id}-${c.cycleId}-p${c.partIndex}`;
+                        const confirmed = c.isPart; // Partes desdobradas já são confirmadas por natureza
 
                         const formatDt = (val) => {
                             let v = val.replace(/\D/g, '');
@@ -4203,16 +4325,17 @@
                             return v;
                         };
 
-                        // Verifica se vendeu os 30 dias para bloquear datas
                         const soldStr = getVal(uniqueId, c, 'sold');
                         const soldDaysStr = getVal(uniqueId, c, 'soldDays');
                         const isSoldAll = soldStr === 'Sim' && String(soldDaysStr) === '30';
 
                         const startStr = isSoldAll ? '' : getVal(uniqueId, c, 'startDate');
                         const endStr = isSoldAll ? '' : getVal(uniqueId, c, 'endDate');
-                        let vacationDays = null;
                         
-                        if (startStr && startStr.length === 10 && endStr && endStr.length === 10) {
+                        let vacationDays = null;
+                        if (c.isPart && c.partDays) {
+                            vacationDays = c.partDays;
+                        } else if (startStr && startStr.length === 10 && endStr && endStr.length === 10) {
                             const [sd, sm, sy] = startStr.split('/');
                             const [ed, em, ey] = endStr.split('/');
                             const sDate = new Date(sy, sm - 1, sd);
@@ -4224,7 +4347,7 @@
                         }
 
                         return (
-                          <tr key={uniqueId} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                          <tr key={uniqueId} className={`border-b border-slate-100 dark:border-slate-800/50 transition-colors ${confirmed ? 'bg-slate-50/40 dark:bg-slate-800/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}>
                             <td className="p-3 align-top">
                               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2 truncate">
                                 {c.emp.name}
@@ -4236,16 +4359,26 @@
                                 <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{c.emp.workSector}</span>
                               </div>
                               
-                              {/* Nova Lógica: Exibe tag com a data em que a venda integral foi confirmada */}
-                              {isSoldAll ? (
-                                <div className={`mt-2 text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 ${confirmed ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800' : 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800'}`}>
-                                  <DollarSign size={12} /> {confirmed && c.dbData.confirmedDate ? `Vendido em ${c.dbData.confirmedDate}` : 'Vendeu todos os dias'}
-                                </div>
-                              ) : vacationDays !== null && (
-                                <div className={`mt-2 text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 ${confirmed ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800' : 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800'}`}>
-                                  <CalendarIcon size={12} /> {vacationDays} {vacationDays === 1 ? 'dia de férias' : 'dias de férias'}
-                                </div>
-                              )}
+                              <div className="flex flex-wrap items-center gap-2 mt-2">
+                                {isSoldAll ? (
+                                  <div className={`text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 ${confirmed ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800' : 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800'}`}>
+                                    <DollarSign size={12} /> {confirmed && c.dbData.confirmedDate ? `Vendido em ${c.dbData.confirmedDate}` : 'Vendeu todos os dias'}
+                                  </div>
+                                ) : c.isPart && c.partDays > 0 && c.partDays < 30 ? (
+                                  <div className={`text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800`}>
+                                    <CalendarIcon size={12} /> Férias Parcial ({c.partDays} dias)
+                                  </div>
+                                ) : vacationDays !== null && (
+                                  <div className={`text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 ${confirmed ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800' : 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800'}`}>
+                                    <CalendarIcon size={12} /> {vacationDays} {vacationDays === 1 ? 'dia' : 'dias'} {confirmed ? 'confirmado(s)' : 'programado(s)'}
+                                  </div>
+                                )}
+                                {!c.isPart && !isSoldAll && c.remainingDays !== undefined && c.remainingDays < 30 && c.remainingDays > 0 && (
+                                  <div className="text-[10px] font-bold px-2 py-1 rounded-md border w-fit inline-flex items-center gap-1 bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-400 dark:border-sky-800">
+                                    <CalendarIcon size={12} /> Saldo Restante: {c.remainingDays} dias
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             
                             <td className="p-3 align-top text-xs space-y-1.5">
@@ -4387,7 +4520,6 @@
                   </table>
                 </div>
 
-                {/* Popover Absoluto com animação Hover igual aos Colaboradores */}
                 {dropdownState && (
                   <div 
                     className="absolute z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
