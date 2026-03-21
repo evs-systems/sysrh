@@ -410,28 +410,32 @@
             <div ref={selectRef} className={`flex flex-col gap-1 relative ${className}`}>
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">{label}</label>
 
-              <select
-                className="absolute opacity-0 w-0 h-0 pointer-events-none top-1/2"
-                value={value}
-                onChange={onChange}
-                required={required}
-                tabIndex={-1}
-                {...props}
-              >
-                <option value="" disabled></option>
-                {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </select>
+              <div className="relative w-full">
+                {/* Select nativo escondido atrás do botão, mas com o tamanho real para ancorar o balão de aviso perfeitamente */}
+                <select
+                  className="absolute inset-0 w-full h-full opacity-0 z-[-1]"
+                  value={value}
+                  onChange={onChange}
+                  required={required}
+                  onFocus={() => setIsOpen(true)}
+                  tabIndex={-1}
+                  {...props}
+                >
+                  <option value="" disabled></option>
+                  {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
 
-              <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${isOpen ? theme.ring + ' ring-2 border-transparent' : ''} text-left text-slate-900 dark:text-white backdrop-blur-sm flex items-center justify-between shadow-sm hover:bg-white/80 dark:hover:bg-slate-800/80`}
-              >
-                <span className={!selectedOption ? 'text-slate-400' : 'truncate'}>
-                  {selectedOption ? selectedOption.label : 'Selecione...'}
-                </span>
-                <ChevronDown size={18} className={`transition-transform duration-300 flex-shrink-0 ${isOpen ? 'rotate-180 text-slate-700 dark:text-slate-300' : 'text-slate-400'}`} />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(!isOpen)}
+                  className={`w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${isOpen ? theme.ring + ' ring-2 border-transparent' : ''} text-left text-slate-900 dark:text-white backdrop-blur-sm flex items-center justify-between shadow-sm hover:bg-white/80 dark:hover:bg-slate-800/80`}
+                >
+                  <span className={!selectedOption ? 'text-slate-400' : 'truncate'}>
+                    {selectedOption ? selectedOption.label : 'Selecione...'}
+                  </span>
+                  <ChevronDown size={18} className={`transition-transform duration-300 flex-shrink-0 ${isOpen ? 'rotate-180 text-slate-700 dark:text-slate-300' : 'text-slate-400'}`} />
+                </button>
+              </div>
 
               {isOpen && (
                 <div className="absolute top-[100%] left-0 right-0 mt-2 z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -5647,7 +5651,7 @@
                             onChange={e => setFormData({...formData, isMarried: e.target.value})}
                             options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
                           />
-                          <Input label="Número para Contato" placeholder="(00) 00000-0000" theme={theme} value={formData.contact} onChange={e => setFormData({...formData, contact: formatPhoneMask(e.target.value)})} />
+                          <Input label="Número para Contato" placeholder="(00) 00000-0000" theme={theme} required value={formData.contact} onChange={e => setFormData({...formData, contact: formatPhoneMask(e.target.value)})} />
                           <Input label="E-mail" type="email" placeholder="funcionario@exemplo.com" theme={theme} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                           <div className="flex gap-4 md:col-span-2">
                             <Input label="CPF" placeholder="000.000.000-00" theme={theme} required className="flex-1" value={formData.cpf} onChange={e => setFormData({...formData, cpf: formatCPFMask(e.target.value)})} />
