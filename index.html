@@ -1054,7 +1054,7 @@
 
                 <div className="flex-1 h-full overflow-y-auto pr-1 md:pr-2 custom-scrollbar min-w-0">
                   <div className="w-full max-w-[1600px] mx-auto space-y-6 pb-20">
-                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} />}
+                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} companies={companies} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
@@ -1667,29 +1667,51 @@
             return dateA - dateB;
           });
 
-          // NOVO: Lógica para certificados a vencer (Próximos 30 dias ou vencidos)
+          // NOVO: Lógica para certificados a vencer (Próximos 30 dias ou vencidos) - 100% Sincronizada com a Tabela de Empresas
           const expiringCertificates = [];
-          if (companies) {
+          if (companies && Array.isArray(companies)) {
             companies.forEach(comp => {
-              if (comp.certModel && comp.certExpirationDate) {
-                const expDate = parseBrDateToObj(comp.certExpirationDate);
-                if (expDate) {
-                  const diffTime = expDate.getTime() - normalizedToday.getTime();
-                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                  if (diffDays <= 30) {
-                    expiringCertificates.push({
-                      id: comp.id,
-                      name: comp.name,
-                      certModel: comp.certModel,
-                      expirationDate: comp.certExpirationDate,
-                      _diffDays: diffDays
-                    });
+              // Garante que certs seja sempre um array válido para varredura
+              let certs = [];
+              if (comp.certificates && Array.isArray(comp.certificates) && comp.certificates.length > 0) {
+                 certs = comp.certificates;
+              } else if (comp.certModel) {
+                 certs = [{ model: comp.certModel, expirationDate: comp.certExpirationDate }];
+              }
+              
+              certs.forEach((cert, idx) => {
+                if (cert && cert.model && cert.expirationDate) {
+                  const dateStr = cert.expirationDate.trim();
+                  
+                  if (dateStr.length === 10) {
+                      const [d, m, y] = dateStr.split('/');
+                      const expDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                      
+                      if (!isNaN(expDate.getTime())) {
+                        // Replica EXATAMENTE a mesma lógica usada para pintar de amarelo na tabela de Empresas
+                        const limitDate = new Date(expDate);
+                        limitDate.setDate(limitDate.getDate() - 30);
+
+                        // Se a data de hoje for igual ou maior que a data limite (entrou no alerta de 30 dias ou venceu)
+                        if (normalizedToday >= limitDate || normalizedToday > expDate) {
+                            const diffTime = expDate.getTime() - normalizedToday.getTime();
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            
+                            expiringCertificates.push({
+                              id: `${comp.id}-cert-${idx}`,
+                              name: comp.name,
+                              certModel: cert.model,
+                              expirationDate: cert.expirationDate,
+                              _diffDays: diffDays
+                            });
+                        }
+                      }
                   }
                 }
-              }
+              });
             });
           }
-          // Ordena os certificados para os mais críticos aparecerem primeiro
+          // Ordena os certificados para os mais críticos (menor prazo) aparecerem primeiro
           expiringCertificates.sort((a, b) => a._diffDays - b._diffDays);
 
           // Lógica para listar todos os funcionários atualmente em período de experiência
@@ -1949,7 +1971,7 @@
                           <div key={`cert-${cert.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
                             <div className="flex flex-col min-w-0 flex-1 mr-2">
                               <span className="font-medium truncate">{cert.name}</span>
-                              <span className="text-[10px] text-slate-500 truncate">Mod: {cert.certModel} • Venc: {cert.expirationDate}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Modelo: {cert.certModel} • Vencimento: {cert.expirationDate}</span>
                             </div>
                             <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
                               {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${cert._diffDays} dias`}
@@ -4889,11 +4911,11 @@
             cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '',
             partners: [{ name: '', cpf: '' }],
             socialContractName: '', socialContractUrl: '',
-            certModel: '', certFileName: '', certFileUrl: '', certExpirationDate: '', certPassword: ''
+            certificates: [] // Nova estrutura de Array para múltiplos certificados
           };
           
           const [formData, setFormData] = useState(initialFormState);
-          const [showCertPassword, setShowCertPassword] = useState(false);
+          const [showCertPassword, setShowCertPassword] = useState({});
           const [showTablePasswords, setShowTablePasswords] = useState({});
 
           const canWrite = appUser?.permissions?.companies?.write;
@@ -4903,12 +4925,23 @@
             if (!canWrite) return;
             if (comp) {
               setEditingId(comp.id);
-              setFormData({ ...initialFormState, ...comp, partners: comp.partners || [{ name: '', cpf: '' }] });
+              // Migração e carregamento inteligente dos certificados
+              let certs = comp.certificates ? [...comp.certificates] : [];
+              if (comp.certModel && certs.length === 0) {
+                 certs.push({
+                   model: comp.certModel,
+                   expirationDate: comp.certExpirationDate || '',
+                   password: comp.certPassword || '',
+                   fileName: comp.certFileName || '',
+                   fileUrl: comp.certFileUrl || ''
+                 });
+              }
+              setFormData({ ...initialFormState, ...comp, partners: comp.partners || [{ name: '', cpf: '' }], certificates: certs });
             } else {
               setEditingId(null);
               setFormData(initialFormState);
             }
-            setShowCertPassword(false);
+            setShowCertPassword({});
             setIsModalOpen(true);
           };
 
@@ -4948,7 +4981,6 @@
             });
           };
 
-          // --- UPLOAD DE CONTRATO SOCIAL ---
           const handleSocialContractUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -4995,8 +5027,8 @@
             });
           };
 
-          // --- UPLOAD DE CERTIFICADO DIGITAL ---
-          const handleCertUpload = async (e) => {
+          // --- UPLOAD E GESTÃO DE MÚLTIPLOS CERTIFICADOS ---
+          const handleCertUpload = async (e, index) => {
             const file = e.target.files[0];
             if (!file) return;
 
@@ -5013,12 +5045,13 @@
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
               
-              setFormData(prev => ({
-                ...prev,
-                certFileName: file.name,
-                certFileUrl: url
-              }));
-              logAction('Anexo', 'Empresas', `Anexou Certificado Digital A1 da empresa ${formData.name || 'Nova Empresa'}`);
+              setFormData(prev => {
+                 const newCerts = [...prev.certificates];
+                 newCerts[index].fileName = file.name;
+                 newCerts[index].fileUrl = url;
+                 return { ...prev, certificates: newCerts };
+              });
+              logAction('Anexo', 'Empresas', `Anexou arquivo do Certificado A1 da empresa ${formData.name || 'Nova Empresa'}`);
               showToast('Certificado anexado com sucesso!');
             } catch (err) {
               showToast(`Erro ao processar o arquivo do certificado. Verifique sua conexão.`, 'error');
@@ -5026,27 +5059,72 @@
             e.target.value = ''; 
           };
 
-          const removeCertificate = () => {
-            requestConfirm('Tem certeza que deseja remover o Certificado A1 anexado?', () => {
-              setFormData(prev => ({
-                ...prev,
-                certFileName: '',
-                certFileUrl: ''
-              }));
-              logAction('Exclusão', 'Empresas', `Removeu o Certificado Digital da empresa ${formData.name}`);
+          const removeCertificateFile = (index) => {
+            requestConfirm('Tem certeza que deseja remover e substituir o arquivo A1 anexado?', () => {
+              setFormData(prev => {
+                 const newCerts = [...prev.certificates];
+                 newCerts[index].fileName = '';
+                 newCerts[index].fileUrl = '';
+                 return { ...prev, certificates: newCerts };
+              });
+              logAction('Exclusão', 'Empresas', `Removeu o arquivo do Certificado A1 da empresa ${formData.name}`);
             });
           };
+
+          const removeCertificateBlock = (index) => {
+            requestConfirm('Tem certeza que deseja excluir este certificado digital completamente?', () => {
+              setFormData(prev => {
+                 const newCerts = prev.certificates.filter((_, i) => i !== index);
+                 return { ...prev, certificates: newCerts };
+              });
+            });
+          };
+
+          const addCert = (model) => {
+            setFormData(prev => ({
+               ...prev,
+               certificates: [...(prev.certificates || []), { model, expirationDate: '', password: '', fileName: '', fileUrl: '' }]
+            }));
+          };
+          // ----------------------------------------------
 
           const handleSave = async (e) => {
             e.preventDefault();
             if (!canWrite) return;
             try {
+              const payload = { ...formData };
+              
+              // Garante retrocompatibilidade pro Dashboard continuar funcionando sem ser alterado
+              if (payload.certificates && payload.certificates.length > 0) {
+                  // Ordena para que o Dashboard veja na raiz o certificado que vence primeiro
+                  const sortedCerts = [...payload.certificates].sort((a,b) => {
+                      const getT = (d) => {
+                          if(!d || d.length < 10) return 9999999999999;
+                          const [day, m, y] = d.split('/');
+                          return new Date(y, m-1, day).getTime();
+                      };
+                      return getT(a.expirationDate) - getT(b.expirationDate);
+                  });
+                  const primary = sortedCerts[0];
+                  payload.certModel = primary.model;
+                  payload.certExpirationDate = primary.expirationDate;
+                  payload.certPassword = primary.password;
+                  payload.certFileName = primary.fileName;
+                  payload.certFileUrl = primary.fileUrl;
+              } else {
+                  payload.certModel = '';
+                  payload.certExpirationDate = '';
+                  payload.certPassword = '';
+                  payload.certFileName = '';
+                  payload.certFileUrl = '';
+              }
+
               if (editingId) {
-                await updateDoc(doc(db, `${basePath}/companies/${editingId}`), formData);
+                await updateDoc(doc(db, `${basePath}/companies/${editingId}`), payload);
                 logAction('Atualização', 'Empresas', `Atualizou a empresa ${formData.name}`);
                 showToast('Empresa atualizada com sucesso!');
               } else {
-                await addDoc(collection(db, `${basePath}/companies`), formData);
+                await addDoc(collection(db, `${basePath}/companies`), payload);
                 logAction('Cadastro', 'Empresas', `Cadastrou a empresa ${formData.name}`);
                 showToast('Empresa cadastrada com sucesso!');
               }
@@ -5069,12 +5147,36 @@
             });
           };
 
-          const toggleTablePassword = (id) => {
-             setShowTablePasswords(prev => ({ ...prev, [id]: !prev[id] }));
+          const toggleTablePassword = (certId) => {
+             setShowTablePasswords(prev => ({ ...prev, [certId]: !prev[certId] }));
           };
 
-          // Ordena as empresas em ordem alfabética
           const sortedCompanies = [...companies].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+          // Transformação para listar múltiplos certificados na tabela
+          const certRows = [];
+          sortedCompanies.forEach(comp => {
+            let certs = comp.certificates || [];
+            if (comp.certModel && certs.length === 0) {
+                certs = [{ model: comp.certModel, expirationDate: comp.certExpirationDate, password: comp.certPassword, fileName: comp.certFileName, fileUrl: comp.certFileUrl }];
+            }
+            certs.forEach((cert, idx) => {
+                certRows.push({
+                   ...comp,
+                   certModel: cert.model,
+                   certExpirationDate: cert.expirationDate,
+                   certPassword: cert.password,
+                   certFileName: cert.fileName,
+                   certFileUrl: cert.fileUrl,
+                   certId: `${comp.id}-cert-${idx}`,
+                   originalComp: comp
+                });
+            });
+          });
+
+          // Lógica dos botões de adicionar no modal
+          const hasA1 = (formData.certificates || []).some(c => c.model === 'A1');
+          const hasA3 = (formData.certificates || []).some(c => c.model === 'A3');
 
           return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -5146,7 +5248,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedCompanies.filter(c => c.certModel).map(comp => {
+                        {certRows.map(comp => {
                           let limitStr = '-';
                           let isExpired = false;
                           let isWarning = false;
@@ -5168,7 +5270,7 @@
                           }
 
                           return (
-                            <tr key={comp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <tr key={comp.certId} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                               <td className="p-4 font-medium text-slate-900 dark:text-white">
                                 {comp.name}
                                 <div className="text-xs text-slate-500">{comp.cnpj}</div>
@@ -5189,13 +5291,13 @@
                               <td className="p-4">
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono text-sm bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 w-24 text-center tracking-wider">
-                                    {showTablePasswords[comp.id] ? (comp.certPassword || '-') : '••••••••'}
+                                    {showTablePasswords[comp.certId] ? (comp.certPassword || '-') : '••••••••'}
                                   </span>
                                   <button 
-                                    onClick={() => toggleTablePassword(comp.id)} 
+                                    onClick={() => toggleTablePassword(comp.certId)} 
                                     className="text-[10px] font-bold px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-300 transition-colors"
                                   >
-                                    {showTablePasswords[comp.id] ? 'OCULTAR' : 'VER'}
+                                    {showTablePasswords[comp.certId] ? 'OCULTAR' : 'VER'}
                                   </button>
                                 </div>
                               </td>
@@ -5206,7 +5308,7 @@
                                   </button>
                                 )}
                                 {canWrite && (
-                                  <button onClick={() => openModal(comp)} className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="Atualizar Certificado">
+                                  <button onClick={() => openModal(comp.originalComp)} className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="Atualizar Certificado">
                                     <Edit2 size={18} />
                                   </button>
                                 )}
@@ -5214,7 +5316,7 @@
                             </tr>
                           )
                         })}
-                        {sortedCompanies.filter(c => c.certModel).length === 0 && (
+                        {certRows.length === 0 && (
                           <tr><td colSpan="6" className="p-8 text-center text-slate-500">Nenhum certificado digital cadastrado nas empresas.</td></tr>
                         )}
                       </tbody>
@@ -5273,77 +5375,106 @@
                     </div>
                   </div>
 
+                  {/* GESTÃO DE MÚLTIPLOS CERTIFICADOS */}
                   <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Certificado Digital</h3>
-                    <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700">
-                      <Select 
-                        label="Modelo do Certificado" theme={theme} value={formData.certModel} 
-                        onChange={e => setFormData({...formData, certModel: e.target.value})}
-                        options={[ {value: '', label: 'Nenhum / Sem Certificado'}, {value: 'A1', label: 'A1 (Arquivo no Computador)'}, {value: 'A3', label: 'A3 (Token / Cartão Físico)'} ]} 
-                      />
-
-                      {(formData.certModel === 'A1' || formData.certModel === 'A3') && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-2">
-                          <Input 
-                            label="Data de Vencimento" placeholder="DD/MM/AAAA" theme={theme} required 
-                            value={formData.certExpirationDate} 
-                            onChange={e => setFormData({...formData, certExpirationDate: formatDateInput(e.target.value)})} 
-                          />
-                          <div className="relative">
-                            <Input 
-                              label="Senha do Certificado" type={showCertPassword ? 'text' : 'password'} theme={theme} required 
-                              value={formData.certPassword} 
-                              onChange={e => setFormData({...formData, certPassword: e.target.value})} 
-                            />
-                            <button 
-                              type="button" 
-                              onClick={() => setShowCertPassword(!showCertPassword)} 
-                              className="absolute right-3 top-[32px] px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-                            >
-                              {showCertPassword ? 'OCULTAR' : 'MOSTRAR'}
-                            </button>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Certificados Digitais</h3>
+                    
+                    {(formData.certificates || []).map((cert, index) => (
+                       <div key={index} className="p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 mb-4 animate-in fade-in slide-in-from-top-2 relative">
+                          <div className="flex justify-between items-center mb-4 border-b border-slate-200/50 dark:border-slate-700/50 pb-2">
+                             <div className="flex items-center gap-2">
+                                <Key size={16} className={cert.model === 'A1' ? 'text-blue-500' : 'text-purple-500'} />
+                                <h4 className="text-sm font-bold text-slate-600 dark:text-slate-300">Certificado Modelo {cert.model}</h4>
+                             </div>
+                             <button type="button" onClick={() => removeCertificateBlock(index)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 rounded-lg transition-colors" title="Remover Certificado">
+                                <X size={16} />
+                             </button>
                           </div>
-                        </div>
-                      )}
 
-                      {formData.certModel === 'A1' && (
-                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
-                          {formData.certFileUrl ? (
-                            <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                              <div className="flex items-center gap-3 overflow-hidden">
-                                <FileText size={18} className="text-slate-400 flex-shrink-0" />
-                                <div className="flex flex-col min-w-0">
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase">Arquivo A1 Anexado</span>
-                                  <span className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={formData.certFileName}>{formData.certFileName}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                                <button type="button" onClick={() => window.open(formData.certFileUrl, '_blank')} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Visualizar/Baixar">
-                                  <Download size={16} />
-                                </button>
-                                <button type="button" onClick={removeCertificate} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Remover e Substituir">
-                                  <X size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="relative flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors">
-                              <input 
-                                type="file" 
-                                accept=".pfx,.p12,.cer"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                onChange={handleCertUpload}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            <Input 
+                              label="Data de Vencimento" placeholder="DD/MM/AAAA" theme={theme} required 
+                              value={cert.expirationDate} 
+                              onChange={e => {
+                                  const newCerts = [...formData.certificates];
+                                  newCerts[index].expirationDate = formatDateInput(e.target.value);
+                                  setFormData({...formData, certificates: newCerts});
+                              }} 
+                            />
+                            <div className="relative">
+                              <Input 
+                                label="Senha do Certificado" type={showCertPassword[index] ? 'text' : 'password'} theme={theme} required 
+                                value={cert.password} 
+                                onChange={e => {
+                                  const newCerts = [...formData.certificates];
+                                  newCerts[index].password = e.target.value;
+                                  setFormData({...formData, certificates: newCerts});
+                                }} 
                               />
-                              <div className="text-center flex flex-col items-center pointer-events-none">
-                                <Plus size={24} className="text-slate-400 mb-2" />
-                                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Clique ou arraste para anexar o Certificado A1</span>
-                                <span className="text-xs text-slate-500 mt-1">Arquivos .pfx ou .p12 (Máx. 10MB)</span>
-                              </div>
+                              <button 
+                                type="button" 
+                                onClick={() => setShowCertPassword(prev => ({...prev, [index]: !prev[index]}))} 
+                                className="absolute right-3 top-[32px] px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                              >
+                                {showCertPassword[index] ? 'OCULTAR' : 'MOSTRAR'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {cert.model === 'A1' && (
+                            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                              {cert.fileUrl ? (
+                                <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                  <div className="flex items-center gap-3 overflow-hidden">
+                                    <FileText size={18} className="text-slate-400 flex-shrink-0" />
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase">Arquivo A1 Anexado</span>
+                                      <span className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={cert.fileName}>{cert.fileName}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                                    <button type="button" onClick={() => window.open(cert.fileUrl, '_blank')} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Visualizar/Baixar">
+                                      <Download size={16} />
+                                    </button>
+                                    <button type="button" onClick={() => removeCertificateFile(index)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Remover e Substituir">
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="relative flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                                  <input 
+                                    type="file" 
+                                    accept=".pfx,.p12,.cer"
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    onChange={(e) => handleCertUpload(e, index)}
+                                  />
+                                  <div className="text-center flex flex-col items-center pointer-events-none">
+                                    <Plus size={24} className="text-slate-400 mb-2" />
+                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Clique ou arraste para anexar o Certificado A1</span>
+                                    <span className="text-xs text-slate-500 mt-1">Arquivos .pfx ou .p12 (Máx. 10MB)</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
-                        </div>
-                      )}
-                    </div>
+                       </div>
+                    ))}
+
+                    {(!hasA1 || !hasA3) && (
+                       <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                         {!hasA1 && (
+                            <Button type="button" variant="ghost" theme={theme} onClick={() => addCert('A1')} icon={Plus} className="w-full border border-dashed border-slate-300 dark:border-slate-600">
+                              Adicionar Certificado A1
+                            </Button>
+                         )}
+                         {!hasA3 && (
+                            <Button type="button" variant="ghost" theme={theme} onClick={() => addCert('A3')} icon={Plus} className="w-full border border-dashed border-slate-300 dark:border-slate-600">
+                              Adicionar Certificado A3
+                            </Button>
+                         )}
+                       </div>
+                    )}
                   </div>
 
                   <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
