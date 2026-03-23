@@ -1971,7 +1971,7 @@
                           <div key={`cert-${cert.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
                             <div className="flex flex-col min-w-0 flex-1 mr-2">
                               <span className="font-medium truncate">{cert.name}</span>
-                              <span className="text-[10px] text-slate-500 truncate">Modelo: {cert.certModel} • Venc: {cert.expirationDate}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Modelo: {cert.certModel} • Vencimento: {cert.expirationDate}</span>
                             </div>
                             <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
                               {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${cert._diffDays} dias`}
