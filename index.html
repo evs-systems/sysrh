@@ -4713,6 +4713,7 @@
             'Reunião': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' },
             'Lembrete': { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
             'Feriado': { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-800' },
+            'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' }
           };
 
           const TIME_OPTIONS = [
@@ -4757,6 +4758,58 @@
           const today = new Date();
           const todayStr = formatStr(today.getFullYear(), today.getMonth() + 1, today.getDate());
 
+          // --- LÓGICA DE FERIADOS DINÂMICOS NA AGENDA ---
+          const getHolidays = (y, m) => {
+            const easter = getEasterDate(y);
+            const holidays = [];
+
+            const add = (d, hMonth, title, type = 'Feriado') => {
+              if (hMonth - 1 === m) {
+                holidays.push({
+                  id: `sys-hol-${d}-${hMonth}-${y}`,
+                  date: formatStr(y, hMonth, d),
+                  title,
+                  time: '',
+                  type,
+                  description: type === 'Especial' ? 'Data comemorativa / Ponto facultativo' : 'Feriado Nacional ou Municipal (São Paulo)',
+                  isHolidayItem: true
+                });
+              }
+            };
+
+            // Feriados Fixos
+            add(1, 1, 'Confraternização Universal');
+            add(25, 1, 'Aniversário de São Paulo');
+            add(21, 4, 'Tiradentes');
+            add(1, 5, 'Dia do Trabalhador');
+            add(9, 7, 'Revolução Constitucionalista');
+            add(7, 9, 'Independência do Brasil');
+            add(12, 10, 'Nossa Sra. Aparecida');
+            add(2, 11, 'Finados');
+            add(15, 11, 'Proclamação da República');
+            add(20, 11, 'Dia da Consciência Negra');
+            add(25, 12, 'Natal');
+
+            // Feriados Móveis
+            const addMobile = (offsetDays, title, type = 'Feriado') => {
+              const dObj = new Date(easter);
+              dObj.setDate(dObj.getDate() + offsetDays);
+              add(dObj.getDate(), dObj.getMonth() + 1, title, type);
+            };
+
+            addMobile(-48, 'Carnaval', 'Especial'); // Segunda-feira
+            addMobile(-47, 'Carnaval', 'Especial'); // Terça-feira
+            addMobile(-46, 'Quarta-feira de Cinzas', 'Especial');
+            addMobile(-2, 'Paixão de Cristo');
+            addMobile(0, 'Páscoa');
+            addMobile(60, 'Corpus Christi');
+
+            return holidays;
+          };
+
+          const monthHolidays = getHolidays(year, month);
+          // ----------------------------------------------
+
           const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
           const handlePrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
           
@@ -4798,7 +4851,15 @@
             });
           };
 
-          const selectedDayEvents = events.filter(e => e.date === selectedDateStr).sort((a,b) => (a.time || '').localeCompare(b.time || ''));
+          // Mescla Feriados do Sistema com Eventos do Banco de Dados
+          const selectedSysHols = selectedDateStr ? monthHolidays.filter(h => h.date === selectedDateStr) : [];
+          const selectedDbEvents = selectedDateStr ? events.filter(e => e.date === selectedDateStr) : [];
+          const selectedDayEvents = [...selectedSysHols, ...selectedDbEvents].sort((a,b) => {
+             if (a.isHolidayItem && !b.isHolidayItem) return -1;
+             if (!a.isHolidayItem && b.isHolidayItem) return 1;
+             return (a.time || '').localeCompare(b.time || '');
+          });
+          
           const selectedDateFormatted = selectedDateStr ? selectedDateStr.split('-').reverse().join('/') : '';
 
           return (
@@ -4832,7 +4893,14 @@
                     ))}
                     {days.map(d => {
                       const dateStr = formatStr(year, month + 1, d);
-                      const dayEvents = events.filter(e => e.date === dateStr).sort((a,b) => (a.time || '').localeCompare(b.time || ''));
+                      const dbDayEvents = events.filter(e => e.date === dateStr);
+                      const sysDayHols = monthHolidays.filter(h => h.date === dateStr);
+                      const dayEvents = [...sysDayHols, ...dbDayEvents].sort((a,b) => {
+                         if (a.isHolidayItem && !b.isHolidayItem) return -1;
+                         if (!a.isHolidayItem && b.isHolidayItem) return 1;
+                         return (a.time || '').localeCompare(b.time || '');
+                      });
+                      
                       const isToday = dateStr === todayStr;
 
                       return (
@@ -4889,8 +4957,8 @@
                             <h4 className="font-bold text-slate-800 dark:text-slate-100 text-base leading-tight">{ev.title}</h4>
                             {ev.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 whitespace-pre-wrap">{ev.description}</p>}
                           </div>
-                          {canDelete && (
-                            <button onClick={() => handleDelete(ev.id, ev.title)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors">
+                          {canDelete && !ev.isHolidayItem && (
+                            <button onClick={() => handleDelete(ev.id, ev.title)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors" title="Excluir evento">
                               <Trash2 size={18} />
                             </button>
                           )}
@@ -4918,7 +4986,7 @@
                         <Select 
                           label="Tipo de Evento" theme={theme} required value={formData.type} 
                           onChange={e => setFormData({...formData, type: e.target.value})}
-                          options={Object.keys(EVENT_TYPES).map(k => ({ value: k, label: k }))} 
+                          options={Object.keys(EVENT_TYPES).filter(k => k !== 'Especial').map(k => ({ value: k, label: k }))} 
                         />
                       </div>
 
