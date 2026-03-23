@@ -1054,7 +1054,7 @@
 
                 <div className="flex-1 h-full overflow-y-auto pr-1 md:pr-2 custom-scrollbar min-w-0">
                   <div className="w-full max-w-[1600px] mx-auto space-y-6 pb-20">
-                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} companies={companies} />}
+                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} companies={companies} events={events} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
@@ -1504,7 +1504,7 @@
           );
         }
 
-        function DashboardView({ theme, appUser, employees, payments, disciplinary, companies }) {
+        function DashboardView({ theme, appUser, employees, payments, disciplinary, companies, events }) {
           // Função inteligente para checar a matriz de permissões do usuário logado
           const checkAccess = (mod) => {
              if (appUser?.sector === 'Administração') return true;
@@ -1516,6 +1516,7 @@
           const showDisc = checkAccess('disciplinary');
           const showVac = checkAccess('vacations');
           const showComp = checkAccess('companies'); // Permissão para ver certificados
+          const showCal = checkAccess('calendar'); // Permissão para ver agenda
 
           const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
@@ -1550,6 +1551,10 @@
             const [d, m] = emp.birthDate.split('/');
             return d === currentDayStr && m === currentMonthStr;
           });
+
+          // Lógica para listar os eventos da Agenda do dia de hoje
+          const todayStrYYYYMMDD = `${currentYear}-${currentMonthStr}-${currentDayStr}`;
+          const todayEvents = (events || []).filter(e => e.date === todayStrYYYYMMDD).sort((a,b) => (a.time || '').localeCompare(b.time || ''));
 
           // Lógica de Datas Normalizada
           const normalizedToday = new Date(todayDateObj);
@@ -1980,6 +1985,43 @@
                         );
                       })}
                       {expiringCertificates.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum certificado vencendo nos próximos 30 dias.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showCal && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <CalendarIcon size={20} className="text-indigo-500 flex-shrink-0" /> Agenda de Hoje
+                    </h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {todayEvents.map(ev => {
+                        const bgTypes = {
+                            'Pagamento': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+                            'Fechamento': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+                            'Reunião': 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+                            'Lembrete': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+                            'Feriado': 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+                        };
+                        const typeClass = bgTypes[ev.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+                        return (
+                          <div key={`ev-${ev.id}`} className="flex flex-col p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase border flex-shrink-0 ${typeClass}`}>
+                                {ev.type}
+                              </span>
+                              {ev.time && (
+                                <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                  <Clock size={12} /> {ev.time}
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-medium text-sm truncate">{ev.title}</span>
+                            {ev.description && <span className="text-[10px] text-slate-500 truncate mt-0.5">{ev.description}</span>}
+                          </div>
+                        );
+                      })}
+                      {todayEvents.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum evento na agenda para hoje.</p>}
                     </div>
                   </Card>
                 )}
