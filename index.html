@@ -1460,28 +1460,20 @@
                         <form onSubmit={(e) => {
                           e.preventDefault();
                           handleSend(e);
-                          const textarea = e.target.querySelector('textarea');
-                          if (textarea) {
-                            textarea.style.height = '44px'; // Reseta a altura após o envio
-                          }
+                          const ta = e.target.querySelector('textarea');
+                          if (ta) ta.style.height = '44px';
                         }} className="flex items-end gap-2 relative">
                           <textarea 
-                            rows="1"
-                            placeholder="Digite sua mensagem..." 
-                            className={`flex-1 px-4 py-2.5 text-sm bg-slate-100 dark:bg-slate-900 border border-transparent rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 dark:text-white resize-none custom-scrollbar`}
-                            style={{ 
-                              minHeight: '44px', // Altura inicial (1 linha)
-                              maxHeight: '120px', // Altura máxima (~5 linhas dependendo do font-size e padding)
-                              height: '44px' // Força iniciar com a altura mínima
-                            }}
                             value={inputText}
-                            onChange={e => {
+                            onChange={(e) => {
                               setInputText(e.target.value);
-                              // A mágica acontece aqui: zera a altura, e depois define para o scrollHeight
-                              e.target.style.height = '44px'; 
-                              const newHeight = Math.min(e.target.scrollHeight, 120); // 120px é o limite
-                              e.target.style.height = newHeight + 'px';
-                              
+                              e.target.style.height = '44px';
+                              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                            }}
+                            placeholder={editingMsg ? "Edite sua mensagem..." : "Digite sua mensagem..."}
+                            className={`flex-1 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none resize-none custom-scrollbar min-h-[44px] max-h-[120px] transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-sm`}
+                            rows={1}
+                            onBlur={(e) => {
                               // Se ficou vazio, garante que volte pra 1 linha
                               if (!e.target.value.trim()) {
                                 e.target.style.height = '44px';
@@ -1512,7 +1504,7 @@
           );
         }
 
-        function DashboardView({ theme, appUser, employees, payments, disciplinary }) {
+        function DashboardView({ theme, appUser, employees, payments, disciplinary, companies }) {
           // Função inteligente para checar a matriz de permissões do usuário logado
           const checkAccess = (mod) => {
              if (appUser?.sector === 'Administração') return true;
@@ -1523,6 +1515,7 @@
           const showPay = checkAccess('payments');
           const showDisc = checkAccess('disciplinary');
           const showVac = checkAccess('vacations');
+          const showComp = checkAccess('companies'); // Permissão para ver certificados
 
           const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
@@ -1625,7 +1618,7 @@
             return parseMY(a.deadlineMonth) - parseMY(b.deadlineMonth);
           });
 
-          // NOVO: Lógica para listar férias (Atuais e Próximos 30 dias)
+          // Lógica para listar férias (Atuais e Próximos 30 dias)
           const vacationsList = [];
           activeEmployees.forEach(emp => {
             if (emp.vacations) {
@@ -1673,6 +1666,31 @@
             const dateB = parseBrDateToObj(b.startDate).getTime();
             return dateA - dateB;
           });
+
+          // NOVO: Lógica para certificados a vencer (Próximos 30 dias ou vencidos)
+          const expiringCertificates = [];
+          if (companies) {
+            companies.forEach(comp => {
+              if (comp.certModel && comp.certExpirationDate) {
+                const expDate = parseBrDateToObj(comp.certExpirationDate);
+                if (expDate) {
+                  const diffTime = expDate.getTime() - normalizedToday.getTime();
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  if (diffDays <= 30) {
+                    expiringCertificates.push({
+                      id: comp.id,
+                      name: comp.name,
+                      certModel: comp.certModel,
+                      expirationDate: comp.certExpirationDate,
+                      _diffDays: diffDays
+                    });
+                  }
+                }
+              }
+            });
+          }
+          // Ordena os certificados para os mais críticos aparecerem primeiro
+          expiringCertificates.sort((a, b) => a._diffDays - b._diffDays);
 
           // Lógica para listar todos os funcionários atualmente em período de experiência
           const probationEmployees = [];
@@ -1914,6 +1932,32 @@
                         );
                       })}
                       {expiringContracts.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum contrato vencendo nos próximos 7 dias.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showComp && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Key size={20} className="text-purple-500 flex-shrink-0" /> Certificados a Vencer
+                    </h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {expiringCertificates.map(cert => {
+                        const isOverdue = cert._diffDays < 0;
+                        const isToday = cert._diffDays === 0;
+                        return (
+                          <div key={`cert-${cert.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                            <div className="flex flex-col min-w-0 flex-1 mr-2">
+                              <span className="font-medium truncate">{cert.name}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Mod: {cert.certModel} • Venc: {cert.expirationDate}</span>
+                            </div>
+                            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                              {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${cert._diffDays} dias`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {expiringCertificates.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum certificado vencendo nos próximos 30 dias.</p>}
                     </div>
                   </Card>
                 )}
@@ -4838,15 +4882,19 @@
         function CompaniesView({ theme, basePath, appUser, companies, showToast, logAction, requestConfirm }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [editingId, setEditingId] = useState(null);
+          const [activeSubTab, setActiveSubTab] = useState('empresas');
           
           const initialFormState = {
             name: '', cnpj: '', stateRegistration: '', openingDate: '', regime: 'Simples Nacional',
             cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '',
             partners: [{ name: '', cpf: '' }],
-            socialContractName: '', socialContractUrl: ''
+            socialContractName: '', socialContractUrl: '',
+            certModel: '', certFileName: '', certFileUrl: '', certExpirationDate: '', certPassword: ''
           };
           
           const [formData, setFormData] = useState(initialFormState);
+          const [showCertPassword, setShowCertPassword] = useState(false);
+          const [showTablePasswords, setShowTablePasswords] = useState({});
 
           const canWrite = appUser?.permissions?.companies?.write;
           const canDelete = appUser?.permissions?.companies?.delete;
@@ -4860,6 +4908,7 @@
               setEditingId(null);
               setFormData(initialFormState);
             }
+            setShowCertPassword(false);
             setIsModalOpen(true);
           };
 
@@ -4899,7 +4948,7 @@
             });
           };
 
-          // --- NOVA LÓGICA: UPLOAD DE CONTRATO SOCIAL ---
+          // --- UPLOAD DE CONTRATO SOCIAL ---
           const handleSocialContractUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -4945,7 +4994,48 @@
               logAction('Exclusão', 'Empresas', `Removeu o Contrato Social da empresa ${formData.name}`);
             });
           };
-          // ----------------------------------------------
+
+          // --- UPLOAD DE CERTIFICADO DIGITAL ---
+          const handleCertUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 10 * 1024 * 1024) { 
+              showToast(`O arquivo excede o limite de 10MB.`, 'error');
+              e.target.value = '';
+              return;
+            }
+
+            try {
+              showToast('Enviando certificado digital, aguarde...', 'success');
+              const fileId = generateId();
+              const fileRef = ref(storage, `certificates/${fileId}_${file.name}`);
+              await uploadBytes(fileRef, file);
+              const url = await getDownloadURL(fileRef);
+              
+              setFormData(prev => ({
+                ...prev,
+                certFileName: file.name,
+                certFileUrl: url
+              }));
+              logAction('Anexo', 'Empresas', `Anexou Certificado Digital A1 da empresa ${formData.name || 'Nova Empresa'}`);
+              showToast('Certificado anexado com sucesso!');
+            } catch (err) {
+              showToast(`Erro ao processar o arquivo do certificado. Verifique sua conexão.`, 'error');
+            }
+            e.target.value = ''; 
+          };
+
+          const removeCertificate = () => {
+            requestConfirm('Tem certeza que deseja remover o Certificado A1 anexado?', () => {
+              setFormData(prev => ({
+                ...prev,
+                certFileName: '',
+                certFileUrl: ''
+              }));
+              logAction('Exclusão', 'Empresas', `Removeu o Certificado Digital da empresa ${formData.name}`);
+            });
+          };
 
           const handleSave = async (e) => {
             e.preventDefault();
@@ -4979,6 +5069,10 @@
             });
           };
 
+          const toggleTablePassword = (id) => {
+             setShowTablePasswords(prev => ({ ...prev, [id]: !prev[id] }));
+          };
+
           // Ordena as empresas em ordem alfabética
           const sortedCompanies = [...companies].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
@@ -4992,47 +5086,140 @@
                 {canWrite && <Button theme={theme} icon={Plus} onClick={() => openModal()}>Nova Empresa</Button>}
               </div>
 
+              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit mb-6 overflow-x-auto">
+                <button onClick={() => setActiveSubTab('empresas')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'empresas' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Cadastro de Empresas</button>
+                <button onClick={() => setActiveSubTab('certificados')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'certificados' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Gestão de Certificados</button>
+              </div>
+
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
-                        <th className="p-4 font-medium">Nome da Empresa</th>
-                        <th className="p-4 font-medium">CNPJ</th>
-                        <th className="p-4 font-medium">Regime</th>
-                        <th className="p-4 font-medium">Localização</th>
-                        {(canWrite || canDelete) && <th className="p-4 font-medium text-right">Ações</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedCompanies.map(comp => (
-                        <tr key={comp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="p-4 font-medium text-slate-900 dark:text-white">
-                            <div className="flex items-center gap-2">
-                              {comp.name}
-                              {comp.socialContractUrl && (
-                                <button type="button" onClick={() => window.open(comp.socialContractUrl, '_blank')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Visualizar Contrato Social">
-                                  <FileText size={16} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4 text-slate-600 dark:text-slate-300">{comp.cnpj}</td>
-                          <td className="p-4 text-slate-600 dark:text-slate-300">{comp.regime || '-'}</td>
-                          <td className="p-4 text-slate-600 dark:text-slate-300">{comp.city ? `${comp.city}/${comp.state}` : '-'}</td>
-                          {(canWrite || canDelete) && (
-                            <td className="p-4 text-right space-x-2 whitespace-nowrap">
-                              {canWrite && <button onClick={() => openModal(comp)} className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"><Edit2 size={18} /></button>}
-                              {canDelete && <button onClick={() => handleDelete(comp.id, comp.name)} className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors"><Trash2 size={18} /></button>}
-                            </td>
-                          )}
+                  {activeSubTab === 'empresas' ? (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                          <th className="p-4 font-medium">Nome da Empresa</th>
+                          <th className="p-4 font-medium">CNPJ</th>
+                          <th className="p-4 font-medium">Regime</th>
+                          <th className="p-4 font-medium">Localização</th>
+                          {(canWrite || canDelete) && <th className="p-4 font-medium text-right">Ações</th>}
                         </tr>
-                      ))}
-                      {sortedCompanies.length === 0 && (
-                        <tr><td colSpan={(canWrite || canDelete) ? "5" : "4"} className="p-8 text-center text-slate-500">Nenhuma empresa registrada. Registre sua primeira empresa.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {sortedCompanies.map(comp => (
+                          <tr key={comp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="p-4 font-medium text-slate-900 dark:text-white">
+                              <div className="flex items-center gap-2">
+                                {comp.name}
+                                {comp.socialContractUrl && (
+                                  <button type="button" onClick={() => window.open(comp.socialContractUrl, '_blank')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Visualizar Contrato Social">
+                                    <FileText size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4 text-slate-600 dark:text-slate-300">{comp.cnpj}</td>
+                            <td className="p-4 text-slate-600 dark:text-slate-300">{comp.regime || '-'}</td>
+                            <td className="p-4 text-slate-600 dark:text-slate-300">{comp.city ? `${comp.city}/${comp.state}` : '-'}</td>
+                            {(canWrite || canDelete) && (
+                              <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                                {canWrite && <button onClick={() => openModal(comp)} className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="Editar Empresa"><Edit2 size={18} /></button>}
+                                {canDelete && <button onClick={() => handleDelete(comp.id, comp.name)} className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors" title="Excluir Empresa"><Trash2 size={18} /></button>}
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                        {sortedCompanies.length === 0 && (
+                          <tr><td colSpan={(canWrite || canDelete) ? "5" : "4"} className="p-8 text-center text-slate-500">Nenhuma empresa registrada. Registre sua primeira empresa.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                          <th className="p-4 font-medium">Nome da Empresa</th>
+                          <th className="p-4 font-medium">Modelo</th>
+                          <th className="p-4 font-medium">Data de Vencimento</th>
+                          <th className="p-4 font-medium">Limite para Renovação <br/><span className="text-[10px] opacity-70">(-30 Dias)</span></th>
+                          <th className="p-4 font-medium">Senha</th>
+                          <th className="p-4 font-medium text-center">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedCompanies.filter(c => c.certModel).map(comp => {
+                          let limitStr = '-';
+                          let isExpired = false;
+                          let isWarning = false;
+
+                          if (comp.certExpirationDate && comp.certExpirationDate.length === 10) {
+                              const [d, m, y] = comp.certExpirationDate.split('/');
+                              const expDate = new Date(y, m - 1, d);
+                              if (!isNaN(expDate.getTime())) {
+                                  const today = new Date();
+                                  today.setHours(0,0,0,0);
+                                  
+                                  const limitDate = new Date(expDate);
+                                  limitDate.setDate(limitDate.getDate() - 30);
+                                  limitStr = `${String(limitDate.getDate()).padStart(2,'0')}/${String(limitDate.getMonth()+1).padStart(2,'0')}/${limitDate.getFullYear()}`;
+
+                                  if (today > expDate) isExpired = true;
+                                  else if (today >= limitDate) isWarning = true;
+                              }
+                          }
+
+                          return (
+                            <tr key={comp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                              <td className="p-4 font-medium text-slate-900 dark:text-white">
+                                {comp.name}
+                                <div className="text-xs text-slate-500">{comp.cnpj}</div>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase border ${comp.certModel === 'A1' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-purple-50 text-purple-600 border-purple-200'}`}>
+                                  {comp.certModel}
+                                </span>
+                              </td>
+                              <td className={`p-4 font-bold ${isExpired ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-slate-600 dark:text-slate-300'}`}>
+                                {comp.certExpirationDate || '-'}
+                                {isExpired && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded uppercase">Vencido</span>}
+                              </td>
+                              <td className="p-4">
+                                <span className={`font-medium ${isWarning && !isExpired ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>{limitStr}</span>
+                                {isWarning && !isExpired && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded uppercase">Renovar</span>}
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 w-24 text-center tracking-wider">
+                                    {showTablePasswords[comp.id] ? (comp.certPassword || '-') : '••••••••'}
+                                  </span>
+                                  <button 
+                                    onClick={() => toggleTablePassword(comp.id)} 
+                                    className="text-[10px] font-bold px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-300 transition-colors"
+                                  >
+                                    {showTablePasswords[comp.id] ? 'OCULTAR' : 'VER'}
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="p-4 text-center space-x-2 whitespace-nowrap">
+                                {comp.certModel === 'A1' && comp.certFileUrl && (
+                                  <button onClick={() => window.open(comp.certFileUrl, '_blank')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60 rounded-lg text-xs font-bold transition-colors shadow-sm" title="Baixar Certificado A1">
+                                    <Download size={14} /> Baixar
+                                  </button>
+                                )}
+                                {canWrite && (
+                                  <button onClick={() => openModal(comp)} className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="Atualizar Certificado">
+                                    <Edit2 size={18} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {sortedCompanies.filter(c => c.certModel).length === 0 && (
+                          <tr><td colSpan="6" className="p-8 text-center text-slate-500">Nenhum certificado digital cadastrado nas empresas.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </Card>
 
@@ -5083,6 +5270,79 @@
                       <Button type="button" variant="ghost" theme={theme} icon={Plus} onClick={addPartner} className="w-full border border-dashed border-slate-300 dark:border-slate-600">
                         Adicionar outro sócio
                       </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Certificado Digital</h3>
+                    <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700">
+                      <Select 
+                        label="Modelo do Certificado" theme={theme} value={formData.certModel} 
+                        onChange={e => setFormData({...formData, certModel: e.target.value})}
+                        options={[ {value: '', label: 'Nenhum / Sem Certificado'}, {value: 'A1', label: 'A1 (Arquivo no Computador)'}, {value: 'A3', label: 'A3 (Token / Cartão Físico)'} ]} 
+                      />
+
+                      {(formData.certModel === 'A1' || formData.certModel === 'A3') && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-2">
+                          <Input 
+                            label="Data de Vencimento" placeholder="DD/MM/AAAA" theme={theme} required 
+                            value={formData.certExpirationDate} 
+                            onChange={e => setFormData({...formData, certExpirationDate: formatDateInput(e.target.value)})} 
+                          />
+                          <div className="relative">
+                            <Input 
+                              label="Senha do Certificado" type={showCertPassword ? 'text' : 'password'} theme={theme} required 
+                              value={formData.certPassword} 
+                              onChange={e => setFormData({...formData, certPassword: e.target.value})} 
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => setShowCertPassword(!showCertPassword)} 
+                              className="absolute right-3 top-[32px] px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                            >
+                              {showCertPassword ? 'OCULTAR' : 'MOSTRAR'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {formData.certModel === 'A1' && (
+                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
+                          {formData.certFileUrl ? (
+                            <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                              <div className="flex items-center gap-3 overflow-hidden">
+                                <FileText size={18} className="text-slate-400 flex-shrink-0" />
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase">Arquivo A1 Anexado</span>
+                                  <span className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={formData.certFileName}>{formData.certFileName}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                                <button type="button" onClick={() => window.open(formData.certFileUrl, '_blank')} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Visualizar/Baixar">
+                                  <Download size={16} />
+                                </button>
+                                <button type="button" onClick={removeCertificate} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Remover e Substituir">
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                              <input 
+                                type="file" 
+                                accept=".pfx,.p12,.cer"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                onChange={handleCertUpload}
+                              />
+                              <div className="text-center flex flex-col items-center pointer-events-none">
+                                <Plus size={24} className="text-slate-400 mb-2" />
+                                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Clique ou arraste para anexar o Certificado A1</span>
+                                <span className="text-xs text-slate-500 mt-1">Arquivos .pfx ou .p12 (Máx. 10MB)</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
