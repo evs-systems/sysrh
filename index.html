@@ -1054,7 +1054,7 @@
 
                 <div className="flex-1 h-full overflow-y-auto pr-1 md:pr-2 custom-scrollbar min-w-0">
                   <div className="w-full max-w-[1600px] mx-auto space-y-6 pb-20">
-                    {activeTab === 'dashboard' && <DashboardView theme={theme} employees={employees} payments={payments} disciplinary={disciplinary} />}
+                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
@@ -1483,24 +1483,24 @@
                               e.target.style.height = newHeight + 'px';
                               
                               // Se ficou vazio, garante que volte pra 1 linha
-                              if (e.target.value === '') {
-                                 e.target.style.height = '44px';
+                              if (!e.target.value.trim()) {
+                                e.target.style.height = '44px';
                               }
                             }}
                             onKeyDown={e => {
                               if (e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault();
                                 handleSend(e);
-                                e.target.style.height = '44px'; // Reseta a altura
+                                e.target.style.height = '44px';
                               }
                             }}
                           />
                           <button 
                             type="submit" 
                             disabled={!inputText.trim()}
-                            className={`p-2.5 mb-0.5 rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed ${theme.bg} hover:shadow-md hover:-translate-y-0.5 flex-shrink-0`}
+                            className={`p-3 rounded-xl transition-all flex-shrink-0 ${inputText.trim() ? `${theme.bg} text-white shadow-md hover:-translate-y-0.5` : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
                           >
-                            <Send size={18} />
+                            <Send size={18} className={inputText.trim() ? 'ml-0.5' : ''} />
                           </button>
                         </form>
                       </div>
@@ -1512,14 +1512,25 @@
           );
         }
 
-        function DashboardView({ theme, employees, payments, disciplinary }) {
+        function DashboardView({ theme, appUser, employees, payments, disciplinary }) {
+          // Função inteligente para checar a matriz de permissões do usuário logado
+          const checkAccess = (mod) => {
+             if (appUser?.sector === 'Administração') return true;
+             return appUser?.permissions?.[mod]?.read === true;
+          };
+          
+          const showEmp = checkAccess('employees');
+          const showPay = checkAccess('payments');
+          const showDisc = checkAccess('disciplinary');
+          const showVac = checkAccess('vacations');
+
           const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
-          const stats = [
-            { title: 'Total de Funcionários Ativos', value: activeEmployees.length, icon: Users, color: 'text-blue-500' },
-            { title: 'Total Pago (Mês)', value: formatCurrency(payments.reduce((acc, curr) => acc + Number(curr.amount), 0)), icon: DollarSign, color: 'text-emerald-500' },
-            { title: 'Solicitações Ativas', value: disciplinary.filter(d => d.status !== 'Finalizado').length, icon: FileText, color: 'text-amber-500' },
-          ];
+          // Renderiza os cards superiores apenas se o usuário tiver permissão daquela área
+          const stats = [];
+          if (showEmp) stats.push({ title: 'Total de Funcionários Ativos', value: activeEmployees.length, icon: Users, color: 'text-blue-500' });
+          if (showPay) stats.push({ title: 'Total Pago (Mês)', value: formatCurrency(payments.reduce((acc, curr) => acc + Number(curr.amount), 0)), icon: DollarSign, color: 'text-emerald-500' });
+          if (showDisc) stats.push({ title: 'Solicitações Ativas', value: disciplinary.filter(d => d.status !== 'Finalizado').length, icon: FileText, color: 'text-amber-500' });
 
           const estoqueCount = activeEmployees.filter(e => e.workSector === 'Estoque').length;
           const adminCount = activeEmployees.filter(e => e.workSector === 'Administrativo').length;
@@ -1720,263 +1731,281 @@
                 <p className="text-slate-500 dark:text-slate-400 mt-1">Visão geral do sistema de gestão.</p>
               </header>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {stats.map((stat, i) => (
-                  <Card key={i} className="p-6 flex items-center gap-5 hover:-translate-y-1 transition-transform duration-300">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-700/50 ${stat.color}`}>
-                      <stat.icon size={28} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{stat.title}</p>
-                      <h3 className="text-2xl font-bold mt-1 truncate">{stat.value}</h3>
+              {stats.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {stats.map((stat, i) => (
+                    <Card key={i} className="p-6 flex items-center gap-5 hover:-translate-y-1 transition-transform duration-300">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-700/50 ${stat.color}`}>
+                        <stat.icon size={28} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{stat.title}</p>
+                        <h3 className="text-2xl font-bold mt-1 truncate">{stat.value}</h3>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {showEmp && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                  <Card className="p-6 flex flex-col min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Briefcase size={20} className={theme.text} /> Distribuição por Setor
+                    </h3>
+                    <div className="flex gap-4 flex-1">
+                      <div className="flex-1 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 min-w-0">
+                          <span className="text-4xl font-black text-slate-700 dark:text-slate-200">{adminCount}</span>
+                          <span className="text-sm font-medium text-slate-500 mt-1 truncate max-w-full">Administrativo</span>
+                      </div>
+                      <div className="flex-1 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 min-w-0">
+                          <span className="text-4xl font-black text-slate-700 dark:text-slate-200">{estoqueCount}</span>
+                          <span className="text-sm font-medium text-slate-500 mt-1 truncate max-w-full">Estoque</span>
+                      </div>
                     </div>
                   </Card>
-                ))}
-              </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-                <Card className="p-6 flex flex-col min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Briefcase size={20} className={theme.text} /> Distribuição por Setor
-                  </h3>
-                  <div className="flex gap-4 flex-1">
-                     <div className="flex-1 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 min-w-0">
-                        <span className="text-4xl font-black text-slate-700 dark:text-slate-200">{adminCount}</span>
-                        <span className="text-sm font-medium text-slate-500 mt-1 truncate max-w-full">Administrativo</span>
-                     </div>
-                     <div className="flex-1 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 min-w-0">
-                        <span className="text-4xl font-black text-slate-700 dark:text-slate-200">{estoqueCount}</span>
-                        <span className="text-sm font-medium text-slate-500 mt-1 truncate max-w-full">Estoque</span>
-                     </div>
-                  </div>
-                </Card>
-
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <MapPin size={20} className={theme.text} /> Funcionários por Unidade
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                     {Object.entries(unitsCount).map(([unit, count]) => (
-                        <div key={unit} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-colors hover:border-slate-300 dark:hover:border-slate-600 min-w-0">
-                           <span className="text-2xl font-bold text-slate-700 dark:text-slate-200">{count}</span>
-                           <span className="text-xs font-medium text-slate-500 truncate max-w-full" title={unit}>{unit}</span>
-                        </div>
-                     ))}
-                  </div>
-                </Card>
-              </div>
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <MapPin size={20} className={theme.text} /> Funcionários por Unidade
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {Object.entries(unitsCount).map(([unit, count]) => (
+                          <div key={unit} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-colors hover:border-slate-300 dark:hover:border-slate-600 min-w-0">
+                            <span className="text-2xl font-bold text-slate-700 dark:text-slate-200">{count}</span>
+                            <span className="text-xs font-medium text-slate-500 truncate max-w-full" title={unit}>{unit}</span>
+                          </div>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Users size={20} className={theme.text} /> Colaboradores Recentes
-                  </h3>
-                  <div className="space-y-4">
-                    {activeEmployees.slice(0, 5).map(emp => (
-                      <div key={emp.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                        <div className="flex flex-col min-w-0 flex-1 mr-2">
-                          <span className="font-medium truncate">{emp.name}</span>
-                          <span className="text-xs text-slate-500 truncate">{emp.role}</span>
-                        </div>
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0">{emp.department}</span>
-                      </div>
-                    ))}
-                    {activeEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum funcionário ativo.</p>}
-                  </div>
-                </Card>
-
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2 truncate">
-                    <Gift size={20} className="text-pink-500 flex-shrink-0" /> Aniversariantes do Dia
-                  </h3>
-                  <div className="space-y-4">
-                    {birthdaysToday.map(emp => {
-                      const birthYear = emp.birthDate.split('/')[2];
-                      const turningAge = currentYear - parseInt(birthYear);
-                      return (
+                
+                {showEmp && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Users size={20} className={theme.text} /> Colaboradores Recentes
+                    </h3>
+                    <div className="space-y-4">
+                      {activeEmployees.slice(0, 5).map(emp => (
                         <div key={emp.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
                           <div className="flex flex-col min-w-0 flex-1 mr-2">
                             <span className="font-medium truncate">{emp.name}</span>
-                            <span className="text-xs text-slate-500 truncate">{emp.role} • {emp.unit}</span>
+                            <span className="text-xs text-slate-500 truncate">{emp.role}</span>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded-md font-medium bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-400 flex-shrink-0`}>
-                            {turningAge} anos
-                          </span>
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0">{emp.department}</span>
                         </div>
-                      );
-                    })}
-                    {birthdaysToday.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum aniversariante hoje.</p>}
-                  </div>
-                </Card>
+                      ))}
+                      {activeEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum funcionário ativo.</p>}
+                    </div>
+                  </Card>
+                )}
 
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <FileText size={20} className={theme.text} /> Últimas Solicitações
-                  </h3>
-                  <div className="space-y-4">
-                    {disciplinary.slice(0, 5).map(disc => {
-                      const emp = employees.find(e => e.id === disc.employeeId);
-                      const isHighlight = disc.type === 'Desligamento' || disc.type === 'Adiantamento';
-                      return (
-                        <div key={disc.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                          <div className="flex flex-col min-w-0 flex-1 mr-2">
-                            <span className="font-medium truncate">{emp?.name || 'Desconhecido'}</span>
-                            <span className="text-xs text-slate-500 truncate">{formatDate(disc.date)} - {disc.type}</span>
-                          </div>
-                          <span className={`text-xs px-2 py-1 rounded-md font-medium flex-shrink-0 ${isHighlight ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'}`}>
-                            {disc.type}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {disciplinary.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhuma solicitação registrada.</p>}
-                  </div>
-                </Card>
-
-                {/* Acompanhamento de Estágio */}
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Briefcase size={20} className="text-teal-500 flex-shrink-0" /> Estagiários
-                  </h3>
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                    {activeInterns.map(emp => {
-                      const isOverdue = emp._diffDays !== null && emp._diffDays < 0;
-                      const isToday = emp._diffDays === 0;
-                      const showTag = emp._diffDays !== null && emp._diffDays <= 7;
-                      const diasText = Math.abs(emp._diffDays) === 1 ? 'dia' : 'dias';
-
-                      return (
-                        <div key={`intern-${emp.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                          <div className="flex flex-col min-w-0 flex-1 mr-2">
-                            <span className="font-medium truncate">{emp.name}</span>
-                            <span className="text-[10px] text-slate-500 truncate">Término: {emp.internshipEndDate || 'N/A'}</span>
-                          </div>
-                          {emp._diffDays !== null && (
-                            showTag ? (
-                              <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400'}`}>
-                                {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Fim em ${emp._diffDays} ${diasText}`}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
-                                Em andamento
-                              </span>
-                            )
-                          )}
-                        </div>
-                      );
-                    })}
-                    {activeInterns.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum estagiário ativo no momento.</p>}
-                  </div>
-                </Card>
-
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Clock size={20} className="text-orange-500 flex-shrink-0" /> Contratos a Vencer
-                  </h3>
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                    {expiringContracts.map(emp => {
-                      const isOverdue = emp._diffDays < 0;
-                      const isToday = emp._diffDays === 0;
-                      return (
-                        <div key={`contract-${emp.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                          <div className="flex flex-col min-w-0 flex-1 mr-2">
-                            <span className="font-medium truncate">{emp.name}</span>
-                            <span className="text-[10px] text-slate-500 truncate">Término: {emp.contractEndDate}</span>
-                          </div>
-                          <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
-                            {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${emp._diffDays} dias`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {expiringContracts.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum contrato vencendo nos próximos 7 dias.</p>}
-                  </div>
-                </Card>
-
-                {/* Acompanhamento de Empréstimos Ativos */}
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <DollarSign size={20} className="text-emerald-500 flex-shrink-0" /> Empréstimos Ativos
-                  </h3>
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                    {activeLoansList.map(loan => (
-                      <div key={loan.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                        <div className="flex flex-col min-w-0 flex-1 mr-2">
-                          <span className="font-medium truncate">{loan.name}</span>
-                          <span className="text-[10px] text-slate-500 truncate">Início: {loan.loanMonth || '-'} • Fim: {loan.deadlineMonth || '-'}</span>
-                        </div>
-                        <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
-                          Ativo
-                        </span>
-                      </div>
-                    ))}
-                    {activeLoansList.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum empréstimo ativo no momento.</p>}
-                  </div>
-                </Card>
-
-                {/* NOVO: Acompanhamento de Férias */}
-                <Card className="p-6 min-w-0">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Sun size={20} className="text-yellow-500 flex-shrink-0" /> Férias
-                  </h3>
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                    {vacationsList.map(vac => (
-                      <div key={vac.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                        <div className="flex flex-col min-w-0 flex-1 mr-2">
-                          <span className="font-medium truncate">{vac.name}</span>
-                          {vac.type === 'current' ? (
-                            <span className="text-[10px] text-slate-500 truncate">Início: {vac.startDate} • Término: {vac.endDate}</span>
-                          ) : (
-                            <span className="text-[10px] text-slate-500 truncate">Início: {vac.startDate}</span>
-                          )}
-                        </div>
-                        <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${vac.type === 'current' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'}`}>
-                          {vac.type === 'current' ? 'Em Férias' : `Em ${vac.daysUntil} dia(s)`}
-                        </span>
-                      </div>
-                    ))}
-                    {vacationsList.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum colaborador em férias ou agendado para os próximos 30 dias.</p>}
-                  </div>
-                </Card>
-
-                <Card className="p-6 min-w-0 xl:col-span-2">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <ShieldCheck size={20} className="text-indigo-500 flex-shrink-0" /> Fim de Experiência
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                    {probationEmployees.map(emp => {
-                      const isToday = emp._nextMilestoneDiff === 0;
-                      const showTag = emp._nextMilestoneDiff <= 7;
-                      const milestoneText = emp._nextMilestone === '45 Dias' ? '45 dias' : '90 dias';
-                      const diasText = emp._nextMilestoneDiff === 1 ? 'dia' : 'dias';
-
-                      return (
-                        <div key={`prob-${emp.id}`} className="flex flex-col p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
-                          <div className="flex items-center justify-between mb-2">
+                {showEmp && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2 truncate">
+                      <Gift size={20} className="text-pink-500 flex-shrink-0" /> Aniversariantes do Dia
+                    </h3>
+                    <div className="space-y-4">
+                      {birthdaysToday.map(emp => {
+                        const birthYear = emp.birthDate.split('/')[2];
+                        const turningAge = currentYear - parseInt(birthYear);
+                        return (
+                          <div key={emp.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
                             <div className="flex flex-col min-w-0 flex-1 mr-2">
-                              <span className="font-medium truncate text-sm">{emp.name}</span>
-                              <span className="text-[10px] text-slate-500 truncate">{emp.role} {emp.department ? `• ${emp.department}` : ''}</span>
+                              <span className="font-medium truncate">{emp.name}</span>
+                              <span className="text-xs text-slate-500 truncate">{emp.role} • {emp.unit}</span>
                             </div>
-                            {showTag && (
-                              <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400'}`}>
-                                {isToday ? `Fim dos ${milestoneText} Hoje` : `Fim dos ${milestoneText} em ${emp._nextMilestoneDiff} ${diasText}`}
-                              </span>
+                            <span className={`text-xs px-2 py-1 rounded-md font-medium bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-400 flex-shrink-0`}>
+                              {turningAge} anos
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {birthdaysToday.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum aniversariante hoje.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showDisc && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <FileText size={20} className={theme.text} /> Últimas Solicitações
+                    </h3>
+                    <div className="space-y-4">
+                      {disciplinary.slice(0, 5).map(disc => {
+                        const emp = employees.find(e => e.id === disc.employeeId);
+                        const isHighlight = disc.type === 'Desligamento' || disc.type === 'Adiantamento';
+                        return (
+                          <div key={disc.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                            <div className="flex flex-col min-w-0 flex-1 mr-2">
+                              <span className="font-medium truncate">{emp?.name || 'Desconhecido'}</span>
+                              <span className="text-xs text-slate-500 truncate">{formatDate(disc.date)} - {disc.type}</span>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded-md font-medium flex-shrink-0 ${isHighlight ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'}`}>
+                              {disc.type}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {disciplinary.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhuma solicitação registrada.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showEmp && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Briefcase size={20} className="text-teal-500 flex-shrink-0" /> Estagiários
+                    </h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {activeInterns.map(emp => {
+                        const isOverdue = emp._diffDays !== null && emp._diffDays < 0;
+                        const isToday = emp._diffDays === 0;
+                        const showTag = emp._diffDays !== null && emp._diffDays <= 7;
+                        const diasText = Math.abs(emp._diffDays) === 1 ? 'dia' : 'dias';
+
+                        return (
+                          <div key={`intern-${emp.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                            <div className="flex flex-col min-w-0 flex-1 mr-2">
+                              <span className="font-medium truncate">{emp.name}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Término: {emp.internshipEndDate || 'N/A'}</span>
+                            </div>
+                            {emp._diffDays !== null && (
+                              showTag ? (
+                                <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400'}`}>
+                                  {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Fim em ${emp._diffDays} ${diasText}`}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                                  Em andamento
+                                </span>
+                              )
                             )}
                           </div>
-                          <div className="flex justify-between items-center text-[10px] bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
-                             <span className={`${emp._diff45 !== null && emp._diff45 < 0 ? 'line-through opacity-50' : 'font-medium text-slate-600 dark:text-slate-300'}`}>
-                               <strong className="text-slate-700 dark:text-slate-200">Fim 45 Dias:</strong> {emp.probation45 || 'N/A'}
-                             </span>
-                             <span className={`${emp._diff90 !== null && emp._diff90 < 0 ? 'line-through opacity-50' : 'font-medium text-slate-600 dark:text-slate-300'}`}>
-                               <strong className="text-slate-700 dark:text-slate-200">Fim 90 Dias:</strong> {emp.probation90 || 'N/A'}
-                             </span>
+                        );
+                      })}
+                      {activeInterns.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum estagiário ativo no momento.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showEmp && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Clock size={20} className="text-orange-500 flex-shrink-0" /> Contratos a Vencer
+                    </h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {expiringContracts.map(emp => {
+                        const isOverdue = emp._diffDays < 0;
+                        const isToday = emp._diffDays === 0;
+                        return (
+                          <div key={`contract-${emp.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                            <div className="flex flex-col min-w-0 flex-1 mr-2">
+                              <span className="font-medium truncate">{emp.name}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Término: {emp.contractEndDate}</span>
+                            </div>
+                            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                              {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${emp._diffDays} dias`}
+                            </span>
                           </div>
+                        );
+                      })}
+                      {expiringContracts.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum contrato vencendo nos próximos 7 dias.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showEmp && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <DollarSign size={20} className="text-emerald-500 flex-shrink-0" /> Empréstimos Ativos
+                    </h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {activeLoansList.map(loan => (
+                        <div key={loan.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                          <div className="flex flex-col min-w-0 flex-1 mr-2">
+                            <span className="font-medium truncate">{loan.name}</span>
+                            <span className="text-[10px] text-slate-500 truncate">Início: {loan.loanMonth || '-'} • Fim: {loan.deadlineMonth || '-'}</span>
+                          </div>
+                          <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                            Ativo
+                          </span>
                         </div>
-                      );
-                    })}
-                    {probationEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-2">Nenhum colaborador em período de experiência.</p>}
-                  </div>
-                </Card>
+                      ))}
+                      {activeLoansList.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum empréstimo ativo no momento.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showVac && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Sun size={20} className="text-yellow-500 flex-shrink-0" /> Férias
+                    </h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {vacationsList.map(vac => (
+                        <div key={vac.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                          <div className="flex flex-col min-w-0 flex-1 mr-2">
+                            <span className="font-medium truncate">{vac.name}</span>
+                            {vac.type === 'current' ? (
+                              <span className="text-[10px] text-slate-500 truncate">Início: {vac.startDate} • Término: {vac.endDate}</span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 truncate">Início: {vac.startDate}</span>
+                            )}
+                          </div>
+                          <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${vac.type === 'current' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'}`}>
+                            {vac.type === 'current' ? 'Em Férias' : `Em ${vac.daysUntil} dia(s)`}
+                          </span>
+                        </div>
+                      ))}
+                      {vacationsList.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum colaborador em férias ou agendado para os próximos 30 dias.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showEmp && (
+                  <Card className="p-6 min-w-0 xl:col-span-2">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <ShieldCheck size={20} className="text-indigo-500 flex-shrink-0" /> Fim de Experiência
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {probationEmployees.map(emp => {
+                        const isToday = emp._nextMilestoneDiff === 0;
+                        const showTag = emp._nextMilestoneDiff <= 7;
+                        const milestoneText = emp._nextMilestone === '45 Dias' ? '45 dias' : '90 dias';
+                        const diasText = emp._nextMilestoneDiff === 1 ? 'dia' : 'dias';
+
+                        return (
+                          <div key={`prob-${emp.id}`} className="flex flex-col p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex flex-col min-w-0 flex-1 mr-2">
+                                <span className="font-medium truncate text-sm">{emp.name}</span>
+                                <span className="text-[10px] text-slate-500 truncate">{emp.role} {emp.department ? `• ${emp.department}` : ''}</span>
+                              </div>
+                              {showTag && (
+                                <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400'}`}>
+                                  {isToday ? `Fim dos ${milestoneText} Hoje` : `Fim dos ${milestoneText} em ${emp._nextMilestoneDiff} ${diasText}`}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                               <span className={`${emp._diff45 !== null && emp._diff45 < 0 ? 'line-through opacity-50' : 'font-medium text-slate-600 dark:text-slate-300'}`}>
+                                 <strong className="text-slate-700 dark:text-slate-200">Fim 45 Dias:</strong> {emp.probation45 || 'N/A'}
+                               </span>
+                               <span className={`${emp._diff90 !== null && emp._diff90 < 0 ? 'line-through opacity-50' : 'font-medium text-slate-600 dark:text-slate-300'}`}>
+                                 <strong className="text-slate-700 dark:text-slate-200">Fim 90 Dias:</strong> {emp.probation90 || 'N/A'}
+                               </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {probationEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4 md:col-span-2">Nenhum colaborador em período de experiência.</p>}
+                    </div>
+                  </Card>
+                )}
               </div>
             </div>
           );
@@ -4813,7 +4842,8 @@
           const initialFormState = {
             name: '', cnpj: '', stateRegistration: '', openingDate: '', regime: 'Simples Nacional',
             cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '',
-            partners: [{ name: '', cpf: '' }]
+            partners: [{ name: '', cpf: '' }],
+            socialContractName: '', socialContractUrl: ''
           };
           
           const [formData, setFormData] = useState(initialFormState);
@@ -4868,6 +4898,54 @@
               setFormData(prev => ({...prev, partners: prev.partners.filter((_, i) => i !== index)}));
             });
           };
+
+          // --- NOVA LÓGICA: UPLOAD DE CONTRATO SOCIAL ---
+          const handleSocialContractUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) { 
+              showToast(`O arquivo excede o limite de 5MB.`, 'error');
+              e.target.value = '';
+              return;
+            }
+            if (file.type !== 'application/pdf') {
+              showToast(`Apenas arquivos PDF são permitidos para o contrato social.`, 'error');
+              e.target.value = '';
+              return;
+            }
+
+            try {
+              showToast('Enviando contrato social, aguarde...', 'success');
+              const fileId = generateId();
+              const fileRef = ref(storage, `companies/${fileId}_${file.name}`);
+              await uploadBytes(fileRef, file);
+              const url = await getDownloadURL(fileRef);
+              
+              setFormData(prev => ({
+                ...prev,
+                socialContractName: file.name,
+                socialContractUrl: url
+              }));
+              logAction('Anexo', 'Empresas', `Anexou Contrato Social da empresa ${formData.name || 'Nova Empresa'}`);
+              showToast('Contrato Social anexado com sucesso!');
+            } catch (err) {
+              showToast(`Erro ao processar o arquivo. Verifique sua conexão.`, 'error');
+            }
+            e.target.value = ''; 
+          };
+
+          const removeSocialContract = () => {
+            requestConfirm('Tem certeza que deseja remover o Contrato Social anexado?', () => {
+              setFormData(prev => ({
+                ...prev,
+                socialContractName: '',
+                socialContractUrl: ''
+              }));
+              logAction('Exclusão', 'Empresas', `Removeu o Contrato Social da empresa ${formData.name}`);
+            });
+          };
+          // ----------------------------------------------
 
           const handleSave = async (e) => {
             e.preventDefault();
@@ -4929,12 +5007,21 @@
                     <tbody>
                       {sortedCompanies.map(comp => (
                         <tr key={comp.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="p-4 font-medium text-slate-900 dark:text-white">{comp.name}</td>
+                          <td className="p-4 font-medium text-slate-900 dark:text-white">
+                            <div className="flex items-center gap-2">
+                              {comp.name}
+                              {comp.socialContractUrl && (
+                                <button type="button" onClick={() => window.open(comp.socialContractUrl, '_blank')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Visualizar Contrato Social">
+                                  <FileText size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{comp.cnpj}</td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{comp.regime || '-'}</td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{comp.city ? `${comp.city}/${comp.state}` : '-'}</td>
                           {(canWrite || canDelete) && (
-                            <td className="p-4 text-right space-x-2">
+                            <td className="p-4 text-right space-x-2 whitespace-nowrap">
                               {canWrite && <button onClick={() => openModal(comp)} className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"><Edit2 size={18} /></button>}
                               {canDelete && <button onClick={() => handleDelete(comp.id, comp.name)} className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors"><Trash2 size={18} /></button>}
                             </td>
@@ -4996,6 +5083,45 @@
                       <Button type="button" variant="ghost" theme={theme} icon={Plus} onClick={addPartner} className="w-full border border-dashed border-slate-300 dark:border-slate-600">
                         Adicionar outro sócio
                       </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Documentos Anexados</h3>
+                    <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+                      {formData.socialContractUrl ? (
+                        <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <FileText size={18} className="text-slate-400 flex-shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                               <span className="text-[10px] font-bold text-slate-500 uppercase">Contrato Social</span>
+                               <span className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={formData.socialContractName}>{formData.socialContractName}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                            <button type="button" onClick={() => window.open(formData.socialContractUrl, '_blank')} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Visualizar/Baixar">
+                              <Download size={16} />
+                            </button>
+                            <button type="button" onClick={removeSocialContract} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Remover">
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                          <input 
+                            type="file" 
+                            accept="application/pdf"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onChange={handleSocialContractUpload}
+                          />
+                          <div className="text-center flex flex-col items-center pointer-events-none">
+                            <Plus size={24} className="text-slate-400 mb-2" />
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Clique ou arraste para anexar o Contrato Social</span>
+                            <span className="text-xs text-slate-500 mt-1">Apenas arquivos em PDF (Máx. 5MB)</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
