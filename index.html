@@ -6259,20 +6259,21 @@
             const payTime = parseDate(pay.date);
             const isPaid = pay.status === 'Pago';
 
-            // Histórico global para a aba de Histórico
             if (isPaid) {
+              // Pagamentos confirmados vão APENAS para o Histórico
               categorizedPayments.history.push(pay);
             } else {
+              // Pendentes (Até Hoje)
               if (payTime <= todayTime) { 
                 categorizedPayments.today.push(pay);
               }
-            }
 
-            // Inclusão nas abas Programados e Recorrentes para visualização de histórico do mês
-            if (pay.isRecurring) {
-              categorizedPayments.recurring.push(pay);
-            } else {
-              categorizedPayments.future.push(pay);
+              // Mantém APENAS os não confirmados nas áreas de Programados e Recorrentes
+              if (pay.isRecurring) {
+                categorizedPayments.recurring.push(pay);
+              } else {
+                categorizedPayments.future.push(pay);
+              }
             }
           });
 
@@ -6804,7 +6805,9 @@
                 receiptUrl: payData.url,
                 receiptName: payData.fileName,
                 paidAt: new Date().toISOString(),
-                isVerified: false,
+                isVerified: true, // Alterado para true: a confirmação já valida o pagamento
+                verifiedBy: appUser.name,
+                verifiedAt: new Date().toISOString(),
                 lastModifiedBy: appUser.username
               });
               
