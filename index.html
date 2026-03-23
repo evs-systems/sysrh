@@ -1971,7 +1971,7 @@
                           <div key={`cert-${cert.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
                             <div className="flex flex-col min-w-0 flex-1 mr-2">
                               <span className="font-medium truncate">{cert.name}</span>
-                              <span className="text-[10px] text-slate-500 truncate">Modelo: {cert.certModel} • Vencimento: {cert.expirationDate}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Modelo: {cert.certModel} • Venc: {cert.expirationDate}</span>
                             </div>
                             <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
                               {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${cert._diffDays} dias`}
@@ -4906,6 +4906,10 @@
           const [editingId, setEditingId] = useState(null);
           const [activeSubTab, setActiveSubTab] = useState('empresas');
           
+          // Novos estados para Busca e Filtro de Certificados
+          const [certSearchTerm, setCertSearchTerm] = useState('');
+          const [certModelFilter, setCertModelFilter] = useState('');
+          
           const initialFormState = {
             name: '', cnpj: '', stateRegistration: '', openingDate: '', regime: 'Simples Nacional',
             cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '',
@@ -5174,6 +5178,15 @@
             });
           });
 
+          // Lógica de Filtragem dos Certificados
+          const filteredCertRows = certRows.filter(comp => {
+            const searchLower = certSearchTerm.toLowerCase();
+            const matchSearch = (comp.name || '').toLowerCase().includes(searchLower) || 
+                                (comp.cnpj || '').toLowerCase().includes(searchLower);
+            const matchModel = certModelFilter ? comp.certModel === certModelFilter : true;
+            return matchSearch && matchModel;
+          });
+
           // Lógica dos botões de adicionar no modal
           const hasA1 = (formData.certificates || []).some(c => c.model === 'A1');
           const hasA3 = (formData.certificates || []).some(c => c.model === 'A3');
@@ -5192,6 +5205,32 @@
                 <button onClick={() => setActiveSubTab('empresas')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'empresas' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Cadastro de Empresas</button>
                 <button onClick={() => setActiveSubTab('certificados')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'certificados' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Gestão de Certificados</button>
               </div>
+
+              {/* Filtros da Aba de Certificados */}
+              {activeSubTab === 'certificados' && (
+                <Card className="p-4 mb-6 relative z-30">
+                  <div className="flex flex-col sm:flex-row gap-4 items-end">
+                    <div className="relative w-full md:w-1/3">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1 mb-1 block">Buscar Empresa</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" size={18} />
+                        <input 
+                          type="text" 
+                          placeholder="Nome ou CNPJ..." 
+                          className={`w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white backdrop-blur-sm`}
+                          value={certSearchTerm}
+                          onChange={e => setCertSearchTerm(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <Select 
+                      label="Modelo" theme={theme} className="w-full md:w-40"
+                      value={certModelFilter} onChange={e => setCertModelFilter(e.target.value)}
+                      options={[ {value: '', label: 'Todos'}, {value: 'A1', label: 'A1'}, {value: 'A3', label: 'A3'} ]} 
+                    />
+                  </div>
+                </Card>
+              )}
 
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto custom-scrollbar">
@@ -5248,7 +5287,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {certRows.map(comp => {
+                        {filteredCertRows.map(comp => {
                           let limitStr = '-';
                           let isExpired = false;
                           let isWarning = false;
@@ -5280,7 +5319,8 @@
                                   {comp.certModel}
                                 </span>
                               </td>
-                              <td className={`p-4 font-bold ${isExpired ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-slate-600 dark:text-slate-300'}`}>
+                              {/* Alterada a cor da data de vencimento sempre para vermelho */}
+                              <td className="p-4 font-bold text-red-600 dark:text-red-400">
                                 {comp.certExpirationDate || '-'}
                                 {isExpired && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded uppercase">Vencido</span>}
                               </td>
@@ -5316,8 +5356,8 @@
                             </tr>
                           )
                         })}
-                        {certRows.length === 0 && (
-                          <tr><td colSpan="6" className="p-8 text-center text-slate-500">Nenhum certificado digital cadastrado nas empresas.</td></tr>
+                        {filteredCertRows.length === 0 && (
+                          <tr><td colSpan="6" className="p-8 text-center text-slate-500">Nenhum certificado digital encontrado.</td></tr>
                         )}
                       </tbody>
                     </table>
