@@ -1061,7 +1061,7 @@
                     {activeTab === 'benefits' && <BenefitsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} />}
                     {activeTab === 'companies' && <CompaniesView theme={theme} basePath={basePath} appUser={appUser} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'employees' && <EmployeesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
-                    {activeTab === 'payments' && <PaymentsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} payments={payments} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
+                    {activeTab === 'payments' && <PaymentsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} payments={payments} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'disciplinary' && <DisciplinaryView theme={theme} basePath={basePath} appUser={appUser} employees={employees} disciplinary={disciplinary} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'systemUsers' && canAccess('systemUsers') && <SystemUsersView theme={theme} basePath={basePath} systemUsers={systemUsers} showToast={showToast} logAction={logInteraction} firebaseConfig={firebaseConfig} requestConfirm={requestConfirm} appUser={appUser} />}
                     {activeTab === 'logs' && canAccess('logs') && <LogsView theme={theme} basePath={basePath} logs={logs} />}
@@ -6813,7 +6813,7 @@
           );
         }
 
-        function PaymentsView({ theme, basePath, appUser, employees, payments, showToast, logAction, requestConfirm }) {
+        function PaymentsView({ theme, basePath, appUser, employees, payments, companies = [], showToast, logAction, requestConfirm }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [isEditModalOpen, setIsEditModalOpen] = useState(false);
           const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -6830,9 +6830,13 @@
           const currentMonthVal = String(new Date().getMonth() + 1).padStart(2, '0');
           const currentYearVal = String(new Date().getFullYear());
 
+          // Novos estados de filtro do Histórico
           const [historySearchTerm, setHistorySearchTerm] = useState('');
           const [historyMonthFilter, setHistoryMonthFilter] = useState(currentMonthVal);
           const [historyYearFilter, setHistoryYearFilter] = useState(currentYearVal);
+          const [historyCompanyFilter, setHistoryCompanyFilter] = useState('');
+          const [historyCategoryFilter, setHistoryCategoryFilter] = useState('');
+          const [historyTypeFilter, setHistoryTypeFilter] = useState('');
           
           const [scheduledMonthFilter, setScheduledMonthFilter] = useState(currentMonthVal);
           const [scheduledYearFilter, setScheduledYearFilter] = useState(currentYearVal);
@@ -6843,11 +6847,12 @@
             category: 'employee',
             employeeId: '',
             payeeName: '',
+            company: '',
             items: [{ amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não', bankName: '', agency: '', account: '', pixKey: '' }]
           });
 
           const [editFormData, setEditFormData] = useState({
-            id: '', category: 'employee', employeeId: '', payeeName: '', amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não', bankName: '', agency: '', account: '', pixKey: ''
+            id: '', category: 'employee', employeeId: '', payeeName: '', company: '', amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não', bankName: '', agency: '', account: '', pixKey: ''
           });
 
           const [bulkFormData, setBulkFormData] = useState({
@@ -6859,7 +6864,7 @@
           // Repõe a contagem visível sempre que o utilizador muda de aba ou altera os filtros
           useEffect(() => {
             setVisibleCount(50);
-          }, [activeSubTab, historySearchTerm, historyMonthFilter, historyYearFilter, scheduledMonthFilter, scheduledYearFilter]);
+          }, [activeSubTab, historySearchTerm, historyMonthFilter, historyYearFilter, scheduledMonthFilter, scheduledYearFilter, historyCompanyFilter, historyCategoryFilter, historyTypeFilter]);
 
           const canWrite = appUser?.permissions?.payments?.write;
           const canDelete = appUser?.permissions?.payments?.delete;
@@ -6872,6 +6877,26 @@
 
           const OTHER_TYPES = [
             {value: 'Boleto', label: 'Boleto'}, {value: 'Pagamento', label: 'Pagamento'}
+          ];
+
+          // COMBINAÇÃO DE TODOS OS TIPOS PARA O FILTRO
+          const ALL_TYPES = [ ...EMP_TYPES, ...OTHER_TYPES ].sort((a,b) => a.label.localeCompare(b.label));
+
+          // MATRIZ DE CATEGORIAS
+          const CATEGORY_OPTIONS = [
+            {value: 'employee', label: 'Funcionários'},
+            {value: 'Funcionários / Outras Despesas', label: 'Funcionários / Outras Despesas'},
+            {value: 'Pós Vendas', label: 'Pós Vendas'},
+            {value: 'Compras', label: 'Compras'},
+            {value: 'Não Contabilizar', label: 'Não Contabilizar'},
+            {value: 'Contas Fixas', label: 'Contas Fixas'},
+            {value: 'Honorários Contabilidade', label: 'Honorários Contabilidade'},
+            {value: 'Imposto sem Nota de Serviço', label: 'Imposto sem Nota de Serviço'},
+            {value: 'Imposto Simples Nacional', label: 'Imposto Simples Nacional'},
+            {value: 'Sistemas', label: 'Sistemas'},
+            {value: 'Tarifas', label: 'Tarifas'},
+            {value: 'Veículos', label: 'Veículos'},
+            {value: 'other', label: 'Outras Contas / Despesas'}
           ];
 
           const yearOptions = useMemo(() => {
@@ -6946,7 +6971,7 @@
 
           // Filtro para o Histórico Geral
           let displayedHistory = categorizedPayments.history.filter(pay => {
-            const empName = pay.category === 'other' ? pay.payeeName : (employees.find(e => e.id === pay.employeeId)?.name || '');
+            const empName = pay.category !== 'employee' ? pay.payeeName : (employees.find(e => e.id === pay.employeeId)?.name || '');
             const searchMatch = empName.toLowerCase().includes(historySearchTerm.toLowerCase()) || 
                                 (pay.description || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
                                 (pay.type || '').toLowerCase().includes(historySearchTerm.toLowerCase());
@@ -6960,7 +6985,12 @@
               if (historyYearFilter !== 'all') yearMatch = y === historyYearFilter;
             }
 
-            return searchMatch && monthMatch && yearMatch;
+            const comp = pay.category === 'employee' ? (employees.find(e => e.id === pay.employeeId)?.company || '') : (pay.company || '');
+            const companyMatch = historyCompanyFilter ? comp === historyCompanyFilter : true;
+            const categoryMatch = historyCategoryFilter ? pay.category === historyCategoryFilter : true;
+            const typeMatch = historyTypeFilter ? pay.type === historyTypeFilter : true;
+
+            return searchMatch && monthMatch && yearMatch && companyMatch && categoryMatch && typeMatch;
           });
 
           // Filtro para Programados (Inclui Pagos e Pendentes daquele mês)
@@ -7020,15 +7050,20 @@
           };
 
           const handleExportHistoryCSV = () => {
-            const headers = ['Data Pagto.', 'Data Realizado', 'Destinatário', 'Tipo', 'Descrição', 'Banco Origem', 'Valor Total Liquido'];
+            const headers = ['Data Pagto.', 'Data Realizado', 'Categoria', 'Destinatário', 'Empresa', 'Tipo', 'Descrição', 'Banco Origem', 'Valor Total Liquido'];
             const rows = displayedHistory.map(pay => {
-              const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
-              const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
+              const emp = pay.category !== 'employee' ? null : employees.find(e => e.id === pay.employeeId);
+              const payeeName = pay.category !== 'employee' ? pay.payeeName : (emp?.name || 'Desconhecido');
               const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
+              const catLabel = CATEGORY_OPTIONS.find(o => o.value === pay.category)?.label || 'Funcionários';
+              const companyName = pay.category === 'employee' ? (emp?.company || '') : (pay.company || '');
+
               return [
                 `"${formatDate(pay.date)}"`,
                 `"${paymentDate}"`,
+                `"${catLabel}"`,
                 `"${payeeName}"`,
+                `"${companyName}"`,
                 `"${pay.type}"`,
                 `"${pay.description || ''}"`,
                 `"${pay.paymentBank || ''}"`,
@@ -7086,8 +7121,8 @@
                 docPdf.setDrawColor(200, 200, 200);
                 docPdf.line(startX + 10, startY + 28, startX + w - 10, startY + 28);
                 
-                const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
-                const payeeName = pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido');
+                const emp = pay.category !== 'employee' ? null : employees.find(e => e.id === pay.employeeId);
+                const payeeName = pay.category !== 'employee' ? pay.payeeName : (emp?.name || 'Desconhecido');
                 const refMonth = pay.date && pay.date.includes('/') ? pay.date.substring(3) : pay.date; 
                 const paymentDate = pay.paidAt ? new Date(pay.paidAt).toLocaleDateString('pt-BR') : pay.date;
                 
@@ -7095,12 +7130,12 @@
                 docPdf.setFontSize(10);
                 
                 docPdf.setFont("helvetica", "bold");
-                docPdf.text(pay.category === 'other' ? 'Beneficiário:' : 'Colaborador:', startX + 10, currentY);
+                docPdf.text(pay.category !== 'employee' ? 'Beneficiário:' : 'Colaborador:', startX + 10, currentY);
                 docPdf.setFont("helvetica", "normal");
                 docPdf.text(payeeName || "-", startX + 40, currentY);
                 currentY += 8;
                 
-                if (pay.category !== 'other') {
+                if (pay.category === 'employee') {
                   docPdf.setFont("helvetica", "bold");
                   docPdf.text("CPF:", startX + 10, currentY);
                   docPdf.setFont("helvetica", "normal");
@@ -7136,10 +7171,10 @@
                 docPdf.rect(startX + 10, currentY, w - 20, 35, "F");
                 
                 docPdf.setFontSize(9);
-                const entity = pay.category !== 'other' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type;
+                const entity = pay.category === 'employee' ? (emp?.company || 'Empresa não informada') : pay.description || pay.type;
                 
                 const richTextParts = [
-                  { text: `Declaro ter recebido ${pay.category !== 'other' ? 'da empresa ' : 'o valor referente a '}`, bold: false },
+                  { text: `Declaro ter recebido ${pay.category === 'employee' ? 'da empresa ' : 'o valor referente a '}`, bold: false },
                   { text: entity, bold: true },
                   { text: `, o valor de `, bold: false },
                   { text: formatCurrency(pay.amount), bold: true },
@@ -7195,6 +7230,7 @@
             setFormData(prev => ({
                 ...prev, 
                 category: val,
+                company: '',
                 items: prev.items.map(i => ({...i, type: val === 'employee' ? 'Salário' : 'Boleto'}))
             }));
           };
@@ -7210,7 +7246,8 @@
                 return addDoc(collection(db, `${basePath}/payments`), {
                   category: formData.category,
                   employeeId: formData.category === 'employee' ? formData.employeeId : null,
-                  payeeName: formData.category === 'other' ? formData.payeeName : null,
+                  payeeName: formData.category !== 'employee' ? formData.payeeName : null,
+                  company: formData.category !== 'employee' ? formData.company : null,
                   amount: item.amount,
                   date: item.date,
                   type: item.type,
@@ -7232,7 +7269,7 @@
               logAction('Cadastro', 'Pagamentos', `Programou ${formData.items.length} pagamento(s) para ${targetName} (Total: R$ ${totalAmount.toFixed(2)})`);
               showToast('Pagamentos registrados e programados!');
               setIsModalOpen(false);
-              setFormData({ category: 'employee', employeeId: '', payeeName: '', items: [{ amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não', bankName: '', agency: '', account: '', pixKey: '' }] });
+              setFormData({ category: 'employee', employeeId: '', payeeName: '', company: '', items: [{ amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não', bankName: '', agency: '', account: '', pixKey: '' }] });
             } catch (err) {
               showToast('Erro ao programar pagamentos.', 'error');
             }
@@ -7264,6 +7301,7 @@
                   category: 'employee',
                   employeeId: empId,
                   payeeName: null,
+                  company: null,
                   amount: bulkFormData.employeeAmounts[empId],
                   date: bulkFormData.date,
                   type: bulkFormData.type,
@@ -7344,6 +7382,7 @@
               category: pay.category || 'employee',
               employeeId: pay.employeeId || '',
               payeeName: pay.payeeName || '',
+              company: pay.company || '',
               amount: (Number(pay.amount)).toFixed(2),
               date: pay.date,
               type: pay.type,
@@ -7365,7 +7404,8 @@
               await updateDoc(doc(db, `${basePath}/payments/${editFormData.id}`), {
                 category: editFormData.category,
                 employeeId: editFormData.category === 'employee' ? editFormData.employeeId : null,
-                payeeName: editFormData.category === 'other' ? editFormData.payeeName : null,
+                payeeName: editFormData.category !== 'employee' ? editFormData.payeeName : null,
+                company: editFormData.category !== 'employee' ? editFormData.company : null,
                 amount: editFormData.amount,
                 date: editFormData.date,
                 type: editFormData.type,
@@ -7430,7 +7470,7 @@
               });
 
               const payObj = payments.find(p => p.id === payId);
-              const targetName = payObj?.category === 'other' ? payObj.payeeName : employees.find(emp => emp.id === payObj?.employeeId)?.name;
+              const targetName = payObj?.category !== 'employee' ? payObj.payeeName : employees.find(emp => emp.id === payObj?.employeeId)?.name;
               logAction('Anexo', 'Pagamentos', `Anexou comprovante no histórico para ${targetName || 'Desconhecido'}: ${file.name}`);
               
               showToast('Comprovante anexado ao histórico com sucesso!');
@@ -7472,22 +7512,22 @@
                 receiptUrl: payData.url,
                 receiptName: payData.fileName,
                 paidAt: new Date().toISOString(),
-                isVerified: true, // Alterado para true: a confirmação já valida o pagamento
+                isVerified: true, 
                 verifiedBy: appUser.name,
                 verifiedAt: new Date().toISOString(),
                 lastModifiedBy: appUser.username
               });
               
-              const targetName = paymentToProcess.category === 'other' ? paymentToProcess.payeeName : employees.find(emp => emp.id === paymentToProcess.employeeId)?.name;
+              const targetName = paymentToProcess.category !== 'employee' ? paymentToProcess.payeeName : employees.find(emp => emp.id === paymentToProcess.employeeId)?.name;
               logAction('Atualização', 'Pagamentos', `Efetuou o pagamento de ${paymentToProcess.type} para ${targetName} via ${payData.bank}`);
               
-              // Lógica de Recorrência Automática Infinita
               if (paymentToProcess.isRecurring) {
                 const nextDate = calculateNextMonthDate(paymentToProcess.date);
                 await addDoc(collection(db, `${basePath}/payments`), {
                   category: paymentToProcess.category || 'employee',
                   employeeId: paymentToProcess.employeeId || null,
                   payeeName: paymentToProcess.payeeName || null,
+                  company: paymentToProcess.company || null,
                   amount: paymentToProcess.amount,
                   date: nextDate,
                   type: paymentToProcess.type,
@@ -7531,7 +7571,7 @@
             }
           };
 
-          const activeEmployeeToPay = paymentToProcess?.category !== 'other' && paymentToProcess ? employees.find(e => e.id === paymentToProcess.employeeId) : null;
+          const activeEmployeeToPay = paymentToProcess?.category === 'employee' && paymentToProcess ? employees.find(e => e.id === paymentToProcess.employeeId) : null;
 
           const activeEmpsForBulk = employees.filter(e => e.status !== 'Desligado' && (e.name.toLowerCase().includes(bulkSearchTerm.toLowerCase()) || (e.cpf && e.cpf.includes(bulkSearchTerm))));
 
@@ -7583,45 +7623,39 @@
                       />
                     </div>
                   )}
+                </div>
+              </div>
 
-                  {activeSubTab === 'history' && (
-                    <div className="flex flex-col sm:flex-row gap-3 animate-in fade-in duration-300 items-end">
-                      <Select 
-                        label="Mês" 
-                        theme={theme} 
-                        className="w-full sm:w-32"
-                        value={historyMonthFilter} 
-                        onChange={e => setHistoryMonthFilter(e.target.value)} 
-                        options={monthOptions}
-                      />
-                      <Select 
-                        label="Ano" 
-                        theme={theme} 
-                        className="w-full sm:w-32"
-                        value={historyYearFilter} 
-                        onChange={e => setHistoryYearFilter(e.target.value)} 
-                        options={yearOptions}
-                      />
-                      <div className="relative w-full sm:w-auto">
+              {/* Filtros Avançados do Histórico */}
+              {activeSubTab === 'history' && (
+                <Card className="p-4 mb-6 relative z-30 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 items-end">
+                    <div className="xl:col-span-2">
                         <div className="flex flex-col gap-1">
                           <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Buscar</label>
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" size={18} />
                             <input 
                               type="text" 
-                              placeholder="Nome, tipo..." 
-                              className={`w-full sm:w-56 pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white backdrop-blur-sm`}
+                              placeholder="Nome, descrição..." 
+                              className={`w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white backdrop-blur-sm`}
                               value={historySearchTerm}
                               onChange={e => setHistorySearchTerm(e.target.value)}
                             />
                           </div>
                         </div>
-                      </div>
-                      <Button theme={theme} icon={Download} onClick={handleExportHistoryCSV} className="w-full sm:w-auto whitespace-nowrap shadow-sm">Exportar para Planilha</Button>
                     </div>
-                  )}
-                </div>
-              </div>
+                    <Select label="Mês" theme={theme} value={historyMonthFilter} onChange={e => setHistoryMonthFilter(e.target.value)} options={monthOptions} />
+                    <Select label="Ano" theme={theme} value={historyYearFilter} onChange={e => setHistoryYearFilter(e.target.value)} options={yearOptions} />
+                    <Select label="Empresa" theme={theme} value={historyCompanyFilter} onChange={e => setHistoryCompanyFilter(e.target.value)} options={[{value: '', label: 'Todas as Empresas'}, ...[...companies].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(c => ({ value: c.name, label: c.name }))]} />
+                    <Select label="Categoria" theme={theme} value={historyCategoryFilter} onChange={e => setHistoryCategoryFilter(e.target.value)} options={[{value: '', label: 'Todas as Categorias'}, ...CATEGORY_OPTIONS]} />
+                    <Select label="Tipo" theme={theme} value={historyTypeFilter} onChange={e => setHistoryTypeFilter(e.target.value)} options={[{value: '', label: 'Todos os Tipos'}, ...ALL_TYPES]} />
+                  </div>
+                  <div className="flex justify-end mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                     <Button theme={theme} icon={Download} onClick={handleExportHistoryCSV} className="w-full sm:w-auto whitespace-nowrap shadow-sm">Exportar para Planilha</Button>
+                  </div>
+                </Card>
+              )}
 
               {/* MINI-DASHBOARD DE HISTÓRICO */}
               {activeSubTab === 'history' && (
@@ -7669,7 +7703,7 @@
                     </thead>
                     <tbody>
                       {paginatedPayments.map(pay => {
-                        const emp = pay.category === 'other' ? null : employees.find(e => e.id === pay.employeeId);
+                        const emp = pay.category !== 'employee' ? null : employees.find(e => e.id === pay.employeeId);
                         const isLate = parseDate(pay.date) < todayTime && pay.status !== 'Pago';
                         const isSelected = !!printSelections[pay.id];
                         
@@ -7691,11 +7725,20 @@
                             <td className="p-4 font-medium">
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-1.5">
-                                  <span>{pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido')}</span>
+                                  <span>{pay.category !== 'employee' ? pay.payeeName : (emp?.name || 'Desconhecido')}</span>
                                   {pay.isRecurring && <RefreshCw size={12} className="text-blue-500" title="Pagamento Recorrente" />}
                                 </div>
-                                {pay.category !== 'other' && emp?.company && <span className="text-[10px] mt-0.5 px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 w-fit rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 font-medium truncate max-w-[150px]">{emp.company}</span>}
-                                {pay.category === 'other' && <span className="text-[10px] mt-0.5 px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/30 w-fit rounded text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-medium truncate">Despesa Geral</span>}
+                                {pay.category === 'employee' && emp?.company && <span className="text-[10px] mt-0.5 px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 w-fit rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 font-medium truncate max-w-[150px]">{emp.company}</span>}
+                                {pay.category !== 'employee' && (
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/30 rounded text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-medium truncate">
+                                      {CATEGORY_OPTIONS.find(opt => opt.value === pay.category)?.label || 'Outra Conta'}
+                                    </span>
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-medium truncate max-w-[150px]">
+                                      {pay.company || 'Geral'}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             </td>
                             <td className="p-4">
@@ -7760,7 +7803,7 @@
                                   )}
 
                                   {pay.isVerified === false && canWrite && (
-                                    <button onClick={() => handleVerifyPayment(pay.id, pay.type, pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido'), pay.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Conferir Comprovante Alterado">
+                                    <button onClick={() => handleVerifyPayment(pay.id, pay.type, pay.category !== 'employee' ? pay.payeeName : (emp?.name || 'Desconhecido'), pay.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Conferir Comprovante Alterado">
                                       <ShieldCheck size={18} />
                                     </button>
                                   )}
@@ -7769,7 +7812,7 @@
                                 (canWrite || canDelete) ? (
                                   <div className="flex items-center justify-center gap-2 whitespace-nowrap">
                                     {pay.isVerified === false && canWrite && (
-                                      <button onClick={() => handleVerifyPayment(pay.id, pay.type, pay.category === 'other' ? pay.payeeName : (emp?.name || 'Desconhecido'), pay.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência de Lançamento">
+                                      <button onClick={() => handleVerifyPayment(pay.id, pay.type, pay.category !== 'employee' ? pay.payeeName : (emp?.name || 'Desconhecido'), pay.lastModifiedBy)} className="p-2 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors" title="Realizar Conferência de Lançamento">
                                         <ShieldCheck size={18} />
                                       </button>
                                     )}
@@ -7839,11 +7882,12 @@
               {/* Modal: Programar Novos Pagamentos (Múltiplos) */}
               <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Programar Pagamentos">
                 <form onSubmit={handleSave} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 border-b border-slate-200 dark:border-slate-700 pb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 border-b border-slate-200 dark:border-slate-700 pb-4">
                     <Select 
                       label="Categoria do Lançamento" theme={theme} required value={formData.category} 
                       onChange={e => handleCategoryChange(e.target.value)}
-                      options={[{value: 'employee', label: 'Funcionários'}, {value: 'other', label: 'Outras Contas / Despesas'}]} 
+                      options={CATEGORY_OPTIONS} 
+                      className={formData.category === 'employee' ? "md:col-span-1" : ""}
                     />
                     
                     {formData.category === 'employee' ? (
@@ -7851,13 +7895,21 @@
                         label="Selecione o Funcionário" theme={theme} required value={formData.employeeId} 
                         onChange={e => setFormData({...formData, employeeId: e.target.value})}
                         options={employees.map(e => ({ value: e.id, label: e.name }))} 
+                        className="md:col-span-2"
                       />
                     ) : (
-                      <Input 
-                        label="Título / Beneficiário" theme={theme} required value={formData.payeeName} 
-                        onChange={e => setFormData({...formData, payeeName: e.target.value})} 
-                        placeholder="Ex: Conta de Luz, Aluguel de Equipamento..."
-                      />
+                      <>
+                        <Input 
+                          label="Título / Beneficiário" theme={theme} required value={formData.payeeName} 
+                          onChange={e => setFormData({...formData, payeeName: e.target.value})} 
+                          placeholder="Ex: Conta de Luz, Aluguel..."
+                        />
+                        <Select 
+                          label="Empresa Referente" theme={theme} required value={formData.company} 
+                          onChange={e => setFormData({...formData, company: e.target.value})}
+                          options={[{value: '', label: 'Selecione uma empresa'}, ...[...companies].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(c => ({ value: c.name, label: c.name }))]} 
+                        />
+                      </>
                     )}
                   </div>
                   
@@ -7915,7 +7967,7 @@
                           />
                         </div>
 
-                        {formData.category === 'other' && item.type === 'Pagamento' && (
+                        {formData.category !== 'employee' && item.type === 'Pagamento' && (
                           <div className="space-y-4 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-900/20 animate-in fade-in slide-in-from-top-2">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               <Input label="Banco" theme={theme} value={item.bankName} onChange={e => handleItemChange(index, 'bankName', e.target.value)} />
@@ -8062,11 +8114,12 @@
               {/* Modal: Editar Pagamento Programado */}
               <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Pagamento Programado">
                 <form onSubmit={handleEditSave} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 border-b border-slate-200 dark:border-slate-700 pb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 border-b border-slate-200 dark:border-slate-700 pb-4">
                     <Select 
                       label="Categoria" theme={theme} required value={editFormData.category} 
-                      onChange={e => setEditFormData({...editFormData, category: e.target.value, type: e.target.value === 'employee' ? 'Salário' : 'Boleto'})}
-                      options={[{value: 'employee', label: 'Funcionários'}, {value: 'other', label: 'Outras Contas'}]} 
+                      onChange={e => setEditFormData({...editFormData, category: e.target.value, type: e.target.value === 'employee' ? 'Salário' : 'Boleto', company: ''})}
+                      options={CATEGORY_OPTIONS} 
+                      className={editFormData.category === 'employee' ? "md:col-span-1" : ""}
                     />
                     
                     {editFormData.category === 'employee' ? (
@@ -8074,12 +8127,20 @@
                         label="Funcionário" theme={theme} required value={editFormData.employeeId} 
                         onChange={e => setEditFormData({...editFormData, employeeId: e.target.value})}
                         options={employees.map(e => ({ value: e.id, label: e.name }))} 
+                        className="md:col-span-2"
                       />
                     ) : (
-                      <Input 
-                        label="Título / Beneficiário" theme={theme} required value={editFormData.payeeName} 
-                        onChange={e => setEditFormData({...editFormData, payeeName: e.target.value})} 
-                      />
+                      <>
+                        <Input 
+                          label="Título / Beneficiário" theme={theme} required value={editFormData.payeeName} 
+                          onChange={e => setEditFormData({...editFormData, payeeName: e.target.value})} 
+                        />
+                        <Select 
+                          label="Empresa Referente" theme={theme} required value={editFormData.company} 
+                          onChange={e => setEditFormData({...editFormData, company: e.target.value})}
+                          options={[{value: '', label: 'Selecione a empresa'}, ...[...companies].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(c => ({ value: c.name, label: c.name }))]} 
+                        />
+                      </>
                     )}
                   </div>
                   
@@ -8124,7 +8185,7 @@
                     />
                   </div>
 
-                  {editFormData.category === 'other' && editFormData.type === 'Pagamento' && (
+                  {editFormData.category !== 'employee' && editFormData.type === 'Pagamento' && (
                     <div className="space-y-4 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 animate-in fade-in slide-in-from-top-2">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Input label="Banco" theme={theme} value={editFormData.bankName} onChange={e => setEditFormData({...editFormData, bankName: e.target.value})} />
@@ -8161,19 +8222,19 @@
                       <span className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Valor a Liberar</span>
                       <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 my-1">{formatCurrency(paymentToProcess.amount)}</span>
                       <span className="text-sm text-emerald-700 dark:text-emerald-500">
-                        {paymentToProcess.category === 'other' ? paymentToProcess.payeeName : (activeEmployeeToPay?.name || 'Funcionário Deletado')} • {paymentToProcess.type}
+                        {paymentToProcess.category !== 'employee' ? paymentToProcess.payeeName : (activeEmployeeToPay?.name || 'Funcionário Deletado')} • {paymentToProcess.type}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl">
                         <span className="block text-xs font-bold text-slate-500 uppercase mb-2">Origem (Sua Empresa)</span>
-                        <div className="font-medium text-slate-800 dark:text-slate-200">{activeEmployeeToPay?.company || 'Livre'}</div>
-                        <div className="text-xs text-slate-500">{activeEmployeeToPay?.cnpj || '-'}</div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200">{paymentToProcess?.category !== 'employee' ? (paymentToProcess.company || 'Livre') : (activeEmployeeToPay?.company || 'Livre')}</div>
+                        <div className="text-xs text-slate-500">{paymentToProcess?.category !== 'employee' ? '-' : (activeEmployeeToPay?.cnpj || '-')}</div>
                       </div>
                       <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl">
-                        <span className="block text-xs font-bold text-slate-500 uppercase mb-2">Destino ({paymentToProcess.category === 'other' ? 'Beneficiário' : 'Conta do Funcionário'})</span>
-                        {paymentToProcess.category === 'other' ? (
+                        <span className="block text-xs font-bold text-slate-500 uppercase mb-2">Destino ({paymentToProcess.category !== 'employee' ? 'Beneficiário' : 'Conta do Funcionário'})</span>
+                        {paymentToProcess.category !== 'employee' ? (
                           <>
                             {paymentToProcess.type === 'Pagamento' ? (
                               <div className="text-sm space-y-2">
