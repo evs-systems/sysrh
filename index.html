@@ -1546,6 +1546,27 @@
           const currentMonthStr = String(todayDateObj.getMonth() + 1).padStart(2, '0');
           const currentYear = todayDateObj.getFullYear();
 
+          // Lógica de Mensagens Motivacionais Diárias
+          const motivationalMessages = [
+            "O sucesso é a soma de pequenos esforços repetidos dia após dia.",
+            "Acredite no seu potencial e faça acontecer!",
+            "Grandes vitórias exigem grande dedicação. Vamos em frente!",
+            "O trabalho em equipe divide as tarefas e multiplica o sucesso.",
+            "A sua dedicação é a chave para o sucesso de todos nós.",
+            "Não espere por oportunidades, crie-as!",
+            "Um novo dia, uma nova chance de fazer a diferença.",
+            "O seu esforço de hoje é o seu sucesso de amanhã.",
+            "Juntos, transformamos desafios em grandes conquistas.",
+            "A atitude é o que separa o sucesso do fracasso. Mantenha-se positivo!",
+            "Nenhum obstáculo é grande demais quando confiamos na nossa equipe.",
+            "A excelência não é um ato, mas um hábito.",
+            "Valorize cada passo do processo, pois eles constroem o resultado final.",
+            "Foco, determinação e muito trabalho em equipe: essa é a nossa receita.",
+            "Sua energia e dedicação inspiram todos ao seu redor!"
+          ];
+          const dayOfYear = Math.floor((todayDateObj - new Date(currentYear, 0, 0)) / (1000 * 60 * 60 * 24));
+          const dailyMessage = motivationalMessages[dayOfYear % motivationalMessages.length];
+
           const birthdaysToday = activeEmployees.filter(emp => {
             if (!emp.birthDate) return false;
             const [d, m] = emp.birthDate.split('/');
@@ -1775,6 +1796,17 @@
                 <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
                 <p className="text-slate-500 dark:text-slate-400 mt-1">Visão geral do sistema de gestão.</p>
               </header>
+
+              {/* Card de Mensagem Motivacional */}
+              <Card className={`p-6 flex items-center gap-5 border-l-4 border-${theme.main}-500 transition-transform hover:-translate-y-1 mb-2`}>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-${theme.main}-100 dark:bg-${theme.main}-900/30 text-${theme.main}-600 dark:text-${theme.main}-400 flex-shrink-0`}>
+                  <Sun size={28} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Pensamento do Dia</p>
+                  <p className="text-lg font-medium text-slate-800 dark:text-slate-200 italic">"{dailyMessage}"</p>
+                </div>
+              </Card>
 
               {stats.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
