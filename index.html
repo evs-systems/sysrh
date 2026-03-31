@@ -190,7 +190,7 @@
           TrendingUp, Activity, Shield, ChevronDown, Lock, Key, History, FileCheck,
           Briefcase, MapPin, Download, Building, Gift, Calendar as CalendarIcon, Clock,
           BarChart2, UserPlus, UserMinus, Loader2, RefreshCw, ShieldCheck,
-          MessageSquare, Send, Reply, XCircle
+          MessageSquare, Send, Reply, XCircle, Lightbulb
         } from 'lucide-react';
         import { initializeApp, deleteApp } from 'firebase/app';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from 'firebase/auth';
@@ -1800,7 +1800,7 @@
               {/* Card de Mensagem Motivacional */}
               <Card className={`p-6 flex items-center gap-5 border-l-4 border-${theme.main}-500 transition-transform hover:-translate-y-1 mb-2`}>
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-${theme.main}-100 dark:bg-${theme.main}-900/30 text-${theme.main}-600 dark:text-${theme.main}-400 flex-shrink-0`}>
-                  <Sun size={28} />
+                  <Lightbulb size={28} />
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Pensamento do Dia</p>
