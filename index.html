@@ -678,9 +678,18 @@
                 const settingsDoc = await getDoc(doc(db, `${basePath}/settings/${appUser.id}`));
                 if (settingsDoc.exists()) {
                   const data = settingsDoc.data();
-                  if (data.theme) setThemeName(data.theme);
-                  if (data.darkMode !== undefined) setIsDarkMode(data.darkMode);
-                  if (data.wallpaper !== undefined) setWallpaper(data.wallpaper);
+                  if (data.theme) {
+                      setThemeName(data.theme);
+                      localStorage.setItem('sysrh_theme', data.theme);
+                  }
+                  if (data.darkMode !== undefined) {
+                      setIsDarkMode(data.darkMode);
+                      localStorage.setItem('sysrh_darkMode', data.darkMode);
+                  }
+                  if (data.wallpaper !== undefined) {
+                      setWallpaper(data.wallpaper);
+                      localStorage.setItem('sysrh_wallpaper', data.wallpaper);
+                  }
                 }
               } catch (error) {
                 console.error("Erro ao carregar configurações:", error);
@@ -703,10 +712,19 @@
 
           const saveSettings = async (newTheme, newDarkMode, newWallpaper) => {
             if (!appUser) return;
+            
+            // Atualiza visualmente na mesma hora
             setThemeName(newTheme);
             setIsDarkMode(newDarkMode);
             setWallpaper(newWallpaper);
+            
+            // Salva no LocalStorage para os próximos acessos serem instantâneos
+            localStorage.setItem('sysrh_theme', newTheme);
+            localStorage.setItem('sysrh_darkMode', newDarkMode);
+            localStorage.setItem('sysrh_wallpaper', newWallpaper);
+
             try {
+              // Sincroniza com o banco de dados para manter espelhado em outros dispositivos
               await setDoc(doc(db, `${basePath}/settings/${appUser.id}`), {
                 theme: newTheme,
                 darkMode: newDarkMode,
