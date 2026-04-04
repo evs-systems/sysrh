@@ -1036,8 +1036,8 @@
                 </div>
               )}
 
-              <main className="relative z-10 flex-1 h-screen overflow-hidden flex flex-col p-4 md:py-6 md:pr-6 md:pl-4 min-w-0">
-                <div className="md:hidden flex items-center justify-between mb-4 bg-white/70 dark:bg-slate-800/70 p-3 rounded-2xl backdrop-blur-md shadow-sm border border-slate-200/50 dark:border-slate-700/50">
+              <main className="relative z-10 flex-1 h-screen overflow-hidden flex flex-col py-4 pl-4 pr-0 md:py-6 md:pl-4 md:pr-0 min-w-0">
+                <div className="md:hidden flex items-center justify-between mb-4 mr-4 bg-white/70 dark:bg-slate-800/70 p-3 rounded-2xl backdrop-blur-md shadow-sm border border-slate-200/50 dark:border-slate-700/50">
                   <div className="flex items-center gap-3">
                     <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                       <Menu size={20} />
@@ -1056,7 +1056,7 @@
                   </div>
                 </div>
 
-                <div className="flex-1 h-full overflow-y-auto pr-1 md:pr-2 custom-scrollbar min-w-0">
+                <div className="flex-1 h-full overflow-y-auto pr-4 md:pr-6 custom-scrollbar min-w-0">
                   <div className="w-full max-w-[1600px] mx-auto space-y-6 pb-20">
                     {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} companies={companies} events={events} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
