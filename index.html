@@ -5343,7 +5343,7 @@
                 {canWrite && <Button theme={theme} icon={Plus} onClick={() => openModal()}>Nova Empresa</Button>}
               </div>
 
-              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit mb-6 overflow-x-auto">
+              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full mb-6 overflow-x-auto custom-scrollbar">
                 <button onClick={() => setActiveSubTab('empresas')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'empresas' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Cadastro de Empresas</button>
                 <button onClick={() => setActiveSubTab('certificados')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'certificados' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Gestão de Certificados</button>
               </div>
@@ -6114,7 +6114,7 @@
                 </div>
               </div>
 
-              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit mb-6 overflow-x-auto">
+              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full mb-6 overflow-x-auto custom-scrollbar">
                 <button onClick={() => setActiveSubTab('ativos')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'ativos' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Efetivos <span className="ml-1 opacity-60">({activeEmployees.length})</span></button>
                 <button onClick={() => setActiveSubTab('estagios')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'estagios' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Estágios <span className="ml-1 opacity-60">({internEmployees.length})</span></button>
                 <button onClick={() => setActiveSubTab('contratos')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'contratos' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Contratos <span className="ml-1 opacity-60">({contractEmployees.length})</span></button>
@@ -7621,7 +7621,7 @@
               </div>
 
               <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-                <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit overflow-x-auto">
+                <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full overflow-x-auto custom-scrollbar">
                   <button onClick={() => setActiveSubTab('today')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'today' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Pendentes (Até Hoje) <span className="ml-1 opacity-60">({categorizedPayments.today.length})</span></button>
                   <button onClick={() => setActiveSubTab('future')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'future' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Programados <span className="ml-1 opacity-60">({displayedFuture.length})</span></button>
                   <button onClick={() => setActiveSubTab('recurring')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'recurring' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Recorrentes <span className="ml-1 opacity-60">({displayedRecurring.length})</span></button>
@@ -8448,7 +8448,7 @@
                 {canWrite && <Button theme={theme} icon={Plus} onClick={() => openModal()}>Nova Solicitação</Button>}
               </div>
 
-              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit mb-6 overflow-x-auto">
+              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full mb-6 overflow-x-auto custom-scrollbar">
                 <button onClick={() => setActiveSubTab('ativas')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'ativas' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Em Andamento <span className="ml-1 opacity-60">({activeRequests.length})</span></button>
                 <button onClick={() => setActiveSubTab('finalizadas')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'finalizadas' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Finalizados <span className="ml-1 opacity-60">({finishedRequests.length})</span></button>
               </div>
