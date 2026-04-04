@@ -690,10 +690,14 @@
           }, [appUser]);
 
           useEffect(() => {
+            // Atualiza também a cor da barra de navegação/status do Safari e Android
+            const metaTheme = document.querySelector('meta[name="theme-color"]');
             if (isDarkMode) {
               document.documentElement.classList.add('dark');
+              if (metaTheme) metaTheme.setAttribute('content', '#0f172a'); // Fundo Dark (slate-900)
             } else {
               document.documentElement.classList.remove('dark');
+              if (metaTheme) metaTheme.setAttribute('content', '#f8fafc'); // Fundo Light (slate-50)
             }
           }, [isDarkMode]);
 
