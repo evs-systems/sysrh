@@ -47,33 +47,6 @@ Sistema interno de gestão de **Recursos Humanos** e **Financeiro**, desenvolvid
 | Deploy | GitHub Pages |
 | PWA | Service Worker + Web App Manifest |
 
-## Arquitetura
-
-O sistema opera como uma **Single Page Application (SPA)** contida em um único arquivo `index.html`, sem necessidade de build ou servidor backend. O React é compilado diretamente no navegador via Babel Standalone, e todas as dependências são carregadas via CDN/ESM.
-
-```
-index.html          → Aplicação completa (frontend + lógica)
-Firebase Auth       → Autenticação de usuários
-Cloud Firestore     → Banco de dados em tempo real
-Firebase Storage    → Armazenamento de arquivos (comprovantes, documentos)
-GitHub Pages        → Hospedagem estática
-```
-
-## Segurança
-
-- **Autenticação** — Firebase Auth com e-mail/senha
-- **Autorização server-side** — Firestore Security Rules com verificação de matriz de permissões em tempo real
-- **Proteção anti-escalação** — Usuários não podem alterar suas próprias permissões ou setor
-- **Logs imutáveis** — Registros de atividade não podem ser alterados ou apagados
-- **Chat seguro** — Apenas o dono pode editar/apagar suas mensagens, identidade validada por UID
-- **Storage protegido** — Permissões validadas por módulo via integração com Firestore
-- **Bloqueio global** — Caminhos não especificados são bloqueados por padrão
-- **Commits verificados** — Assinatura SSH em todos os commits
-
-## Deploy
-
-O sistema é publicado automaticamente via **GitHub Pages** a partir da branch `main`. Qualquer push atualiza o site em produção.
-
 ## Licença
 
 Uso interno — Todos os direitos reservados.
