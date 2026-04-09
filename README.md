@@ -38,3 +38,9 @@ Sistema interno de gestão de **Recursos Humanos** e **Financeiro**, desenvolvid
 ## 📄 Licença
 
 Uso interno — Todos os direitos reservados.
+
+---
+
+<p align="center">
+  Desenvolvido com 💙 pela equipe de tecnologia da informação.
+</p>
