@@ -554,26 +554,18 @@
                   if (uDoc.exists()) {
                     setAppUser({ id: currentUser.uid, ...uDoc.data() });
                   } else {
-                    setAppUser({ 
-                      id: currentUser.uid, 
-                      name: 'Usuário', 
-                      username: currentUser.email?.split('@')[0] || 'user', 
-                      sector: 'Administração', 
-                      permissions: { calendar: {read: true, write: true, delete: true}, reports: {read: true, write: true, delete: true}, companies: {read: true, write: true, delete: true}, employees: {read: true, write: true, delete: true}, payments: {read: true, write: true, delete: true}, disciplinary: {read: true, write: true, delete: true}, systemUsers: {read: true, write: true, delete: true}, logs: {read: true, write: false, delete: false} }
-                    });
+                    // SEGURANÇA: Conta não cadastrada no sistema — negar acesso
+                    console.warn('Conta Firebase sem perfil no sistema. Acesso negado.');
+                    showToast('Sua conta não está cadastrada no sistema. Contate o administrador.', 'error');
+                    await signOut(auth);
+                    setAppUser(null);
                   }
                 } catch (error) {
-                  console.error("Erro de permissão ao buscar usuário:", error);
-                  if (error.code === 'permission-denied') {
-                    showToast("Erro de permissão! Verifique as Regras do Firestore.", "error");
-                  }
-                  setAppUser({ 
-                    id: currentUser.uid, 
-                    name: 'Acesso Restrito', 
-                    username: 'admin', 
-                    sector: 'Administração', 
-                    permissions: { calendar: {read: true, write: true, delete: true}, reports: {read: true, write: true, delete: true}, companies: {read: true, write: true, delete: true}, employees: {read: true, write: true, delete: true}, payments: {read: true, write: true, delete: true}, disciplinary: {read: true, write: true, delete: true}, systemUsers: {read: true, write: true, delete: true}, logs: {read: true, write: false, delete: false} }
-                  });
+                  console.error("Erro ao buscar perfil do usuário:", error);
+                  // SEGURANÇA: Em caso de erro, negar acesso em vez de conceder permissões
+                  showToast('Erro ao verificar suas permissões. Tente novamente.', 'error');
+                  await signOut(auth);
+                  setAppUser(null);
                 }
               } else {
                 setAppUser(null);
@@ -583,43 +575,7 @@
             return () => unsubscribe();
           }, []);
 
-          useEffect(() => {
-            const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-              setUser(currentUser);
-              if (currentUser) {
-                try {
-                  const uDoc = await getDoc(doc(db, `${basePath}/systemUsers/${currentUser.uid}`));
-                  if (uDoc.exists()) {
-                    setAppUser({ id: currentUser.uid, ...uDoc.data() });
-                  } else {
-                    setAppUser({ 
-                      id: currentUser.uid, 
-                      name: 'Usuário', 
-                      username: currentUser.email?.split('@')[0] || 'user', 
-                      sector: 'Administração', 
-                      permissions: { calendar: {read: true, write: true, delete: true}, reports: {read: true, write: true, delete: true}, companies: {read: true, write: true, delete: true}, employees: {read: true, write: true, delete: true}, payments: {read: true, write: true, delete: true}, disciplinary: {read: true, write: true, delete: true}, systemUsers: {read: true, write: true, delete: true}, logs: {read: true, write: false, delete: false} }
-                    });
-                  }
-                } catch (error) {
-                  // Ocultado o showToast de erro de permissão para não incomodar o usuário
-                  if (error.code !== 'permission-denied') {
-                     console.error("Erro ao buscar usuário:", error);
-                  }
-                  setAppUser({ 
-                    id: currentUser.uid, 
-                    name: 'Acesso Restrito', 
-                    username: 'admin', 
-                    sector: 'Administração', 
-                    permissions: { calendar: {read: true, write: true, delete: true}, reports: {read: true, write: true, delete: true}, companies: {read: true, write: true, delete: true}, employees: {read: true, write: true, delete: true}, payments: {read: true, write: true, delete: true}, disciplinary: {read: true, write: true, delete: true}, systemUsers: {read: true, write: true, delete: true}, logs: {read: true, write: false, delete: false} }
-                  });
-                }
-              } else {
-                setAppUser(null);
-              }
-              setLoading(false);
-            });
-            return () => unsubscribe();
-          }, []);
+          // (Listener duplicado removido — correção de segurança)
 
           useEffect(() => {
             if (!user) return;
@@ -758,38 +714,9 @@
             try {
               await signInWithEmailAndPassword(auth, email, authForm.password);
             } catch (err) {
-              if (authForm.username === 'admin' && authForm.password === 'admin') {
-                try {
-                  const newCred = await createUserWithEmailAndPassword(auth, email, authForm.password);
-                  const masterProfile = {
-                    name: 'Administrador do Sistema',
-                    username: 'admin',
-                    sector: 'Administração',
-                    permissions: {
-                      calendar: { read: true, write: true, delete: true },
-                      reports: { read: true, write: true, delete: true },
-                      companies: { read: true, write: true, delete: true },
-                      employees: { read: true, write: true, delete: true },
-                      payments: { read: true, write: true, delete: true },
-                      disciplinary: { read: true, write: true, delete: true },
-                      systemUsers: { read: true, write: true, delete: true },
-                      logs: { read: true, write: false, delete: false }
-                    }
-                  };
-                  try {
-                    await setDoc(doc(db, `${basePath}systemUsers/${newCred.user.uid}`), masterProfile);
-                  } catch (docErr) {
-                    console.error("Conta criada, mas o banco bloqueou a gravação:", docErr);
-                  }
-                  logInteraction('Login', 'Sistema', 'Acesso ao sistema via conta mestre recém-criada', masterProfile);
-                } catch (createErr) {
-                  setAuthError('Erro ao criar conta. Verifique se Authentication está ativo.');
-                  setIsLoggingIn(false);
-                }
-              } else {
-                setAuthError('Usuário ou senha inválidos.');
-                setIsLoggingIn(false);
-              }
+              // SEGURANÇA: Apenas autenticação com contas pré-existentes (sem auto-criação)
+              setAuthError('Usuário ou senha inválidos.');
+              setIsLoggingIn(false);
             }
           };
 
@@ -804,10 +731,7 @@
             try {
               if (!auth.currentUser) return;
               await updatePassword(auth.currentUser, newPassword);
-              
-              if (appUser?.id) {
-                await updateDoc(doc(db, `${basePath}/systemUsers/${appUser.id}`), { password: newPassword });
-              }
+              // SEGURANÇA: Senha gerenciada exclusivamente pelo Firebase Auth (não salvar em texto plano no Firestore)
               
               showToast('Senha atualizada com sucesso!', 'success');
               logInteraction('Atualização', 'Segurança', 'Alterou a própria senha de acesso');
