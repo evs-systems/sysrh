@@ -34,18 +34,6 @@ Sistema interno de gestão de **Recursos Humanos** e **Financeiro**, desenvolvid
 - **Perfis por Setor** — Modelos pré-configurados (Administração, RH, Financeiro)
 - **Personalização** — Tema claro/escuro, cores de destaque e papéis de parede por usuário
 
-## 💻 Tecnologias
-
-| Camada | Tecnologia |
-|---|---|
-| Frontend | React 18 (JSX via Babel Standalone) |
-| Estilização | Tailwind CSS (CDN) |
-| Ícones | Lucide React |
-| Autenticação | Firebase Auth |
-| Banco de Dados | Cloud Firestore (tempo real) |
-| Armazenamento | Firebase Storage |
-| Deploy | GitHub Pages |
-| PWA | Service Worker + Web App Manifest |
 
 ## 📄 Licença
 
