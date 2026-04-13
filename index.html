@@ -521,6 +521,7 @@
           const [employees, setEmployees] = useState([]);
           const [payments, setPayments] = useState([]);
           const [disciplinary, setDisciplinary] = useState([]);
+          const [occurrences, setOccurrences] = useState([]);
           const [events, setEvents] = useState([]);
           const [systemUsers, setSystemUsers] = useState([]);
           const [logs, setLogs] = useState([]);
@@ -607,6 +608,10 @@
               (snapshot) => { setDisciplinary(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
+            const unsubOccurrences = onSnapshot(collection(db, `${basePath}/occurrences`), 
+              (snapshot) => { setOccurrences(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
+              handleSnapError
+            );
             const unsubEvents = onSnapshot(collection(db, `${basePath}/events`), 
               (snapshot) => { setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
@@ -622,6 +627,7 @@
               unsubEmployees();
               unsubPayments();
               unsubDisciplinary();
+              unsubOccurrences();
               unsubEvents();
               unsubLogs();
             };
@@ -811,6 +817,7 @@
             { id: 'employees', icon: Users, label: 'Colaboradores', req: 'employees' },
             { id: 'payments', icon: DollarSign, label: 'Pagamentos', req: 'payments' },
             { id: 'disciplinary', icon: FileText, label: 'Solicitações', req: 'disciplinary' },
+            { id: 'occurrences', icon: AlertTriangle, label: 'Ocorrências', req: 'occurrences' },
             { id: 'systemUsers', icon: Shield, label: 'Usuários', req: 'systemUsers' },
             { id: 'logs', icon: History, label: 'Histórico de Logs', req: 'logs' }
           ].filter(item => canAccess(item.req));
@@ -1009,6 +1016,7 @@
                     {activeTab === 'employees' && <EmployeesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'payments' && <PaymentsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} payments={payments} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'disciplinary' && <DisciplinaryView theme={theme} basePath={basePath} appUser={appUser} employees={employees} disciplinary={disciplinary} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
+                    {activeTab === 'occurrences' && canAccess('occurrences') && <OccurrencesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} occurrences={occurrences} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'systemUsers' && canAccess('systemUsers') && <SystemUsersView theme={theme} basePath={basePath} systemUsers={systemUsers} showToast={showToast} logAction={logInteraction} firebaseConfig={firebaseConfig} requestConfirm={requestConfirm} appUser={appUser} />}
                     {activeTab === 'logs' && canAccess('logs') && <LogsView theme={theme} basePath={basePath} logs={logs} />}
                     {activeTab === 'settings' && <SettingsView theme={theme} basePath={basePath} themeName={themeName} isDarkMode={isDarkMode} wallpaper={wallpaper} saveSettings={saveSettings} logAction={logInteraction} changePassword={handleChangePassword} showToast={showToast} />}
@@ -8520,6 +8528,397 @@
           );
         }
 
+        function OccurrencesView({ theme, basePath, appUser, employees, occurrences, showToast, logAction, requestConfirm }) {
+          const [activeSubTab, setActiveSubTab] = useState('registros');
+          const [isModalOpen, setIsModalOpen] = useState(false);
+          
+          const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
+          const currentYearStr = String(new Date().getFullYear());
+
+          const [tab1FilterMonth, setTab1FilterMonth] = useState(currentMonthStr);
+          const [tab1FilterYear, setTab1FilterYear] = useState(currentYearStr);
+
+          const [tab2FilterMonth, setTab2FilterMonth] = useState(currentMonthStr);
+          const [tab2FilterYear, setTab2FilterYear] = useState(currentYearStr);
+          const [tab2SearchName, setTab2SearchName] = useState('');
+          const [tab2Sector, setTab2Sector] = useState('all');
+          const [tab2Penalty, setTab2Penalty] = useState('all');
+          const [tab2Reason, setTab2Reason] = useState('all');
+          
+          const defaultDate = new Date().toISOString().split('T')[0].split('-').reverse().join('/');
+          const [formData, setFormData] = useState({ date: defaultDate, employeeId: '', reason: 'Falta', type: '' });
+
+          const handleDateChange = (e) => {
+            let v = e.target.value.replace(/\D/g, '');
+            if (v.length > 2) v = v.substring(0,2) + '/' + v.substring(2);
+            if (v.length > 5) v = v.substring(0,5) + '/' + v.substring(5,9);
+            setFormData({...formData, date: v});
+          };
+
+          const parseDt = (dt) => {
+             if(!dt) return 0;
+             if(dt.includes('/')) {
+                const parts = dt.split('/');
+                return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`).getTime();
+             }
+             return new Date(`${dt}T00:00:00`).getTime();
+          };
+
+          const renderDate = (d) => {
+             if(!d) return '';
+             if(d.includes('-')) return d.split('-').reverse().join('/');
+             return d;
+          };
+
+          const canWrite = appUser?.permissions?.occurrences?.write ?? (appUser?.sector === 'Administração');
+          const canDelete = appUser?.permissions?.occurrences?.delete ?? (appUser?.sector === 'Administração');
+
+          const PUNITIVE_TYPES = [
+            'Verbal',
+            '1ª Escrita',
+            '2ª Escrita',
+            '3ª Escrita',
+            'Suspensão',
+            '2ª Suspensão',
+            '3ª Suspensão'
+          ];
+          const REASONS = ['Falta', 'Atraso', 'Atraso/Falta'];
+
+          const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
+          const SECTORS = [...new Set(activeEmployees.map(e => e.workSector).filter(Boolean))];
+
+          const getEmployeeMaxWarningIndex = (empId) => {
+            if (!empId) return -1;
+            const empOccurrences = occurrences.filter(o => o.employeeId === empId);
+            let maxIndex = -1;
+            empOccurrences.forEach(o => {
+              const idx = PUNITIVE_TYPES.indexOf(o.type);
+              if (idx > maxIndex) maxIndex = idx;
+            });
+            return maxIndex;
+          };
+
+          const getTypeOptionsSafe = (empId) => {
+            if (!empId) return [];
+            const maxIdx = getEmployeeMaxWarningIndex(empId);
+            return PUNITIVE_TYPES.map((type, idx) => {
+              let dis = false;
+              if (maxIdx === PUNITIVE_TYPES.length - 1) {
+                dis = idx < maxIdx; 
+              } else {
+                dis = idx <= maxIdx; 
+              }
+              return { value: type, label: type, disabled: dis };
+            });
+          };
+
+          const lastWarningStr = (empId) => {
+            const maxIdx = getEmployeeMaxWarningIndex(empId);
+            if (maxIdx === -1) return "Nenhuma infração registrada no sistema.";
+            const empOccurrences = occurrences.filter(o => o.employeeId === empId).sort((a,b) => parseDt(b.date) - parseDt(a.date));
+            const lastOcc = empOccurrences[0];
+            if (!lastOcc) return "Nenhuma infração registrada no sistema.";
+            return `Última Infração: ${lastOcc.type} (${lastOcc.reason}) em ${renderDate(lastOcc.date)}.`;
+          };
+
+          const handleEmployeeChange = (empId) => {
+            const maxIdx = getEmployeeMaxWarningIndex(empId);
+            let nextType = '';
+            if (maxIdx < PUNITIVE_TYPES.length - 1) {
+              nextType = PUNITIVE_TYPES[maxIdx + 1];
+            } else {
+              nextType = PUNITIVE_TYPES[maxIdx];
+            }
+            setFormData(prev => ({ ...prev, employeeId: empId, type: nextType }));
+          };
+
+          const handleSave = async (e) => {
+            e.preventDefault();
+            if (!canWrite) return;
+            if (!formData.employeeId || !formData.type) {
+                showToast('Selecione o colaborador e um tipo de penalidade válido.', 'error');
+                return;
+            }
+            try {
+              let empData = activeEmployees.find(e => e.id === formData.employeeId);
+              await addDoc(collection(db, `${basePath}/occurrences`), {
+                ...formData,
+                employeeName: empData?.name || 'Desconhecido',
+                timestamp: new Date().toISOString()
+              });
+              showToast('Ocorrência registrada com sucesso!', 'success');
+              logAction('Cadastro', 'Ocorrências', `Registrou ${formData.type} para ${empData?.name}`);
+              setFormData({ date: defaultDate, employeeId: '', reason: 'Falta', type: '' });
+              setIsModalOpen(false);
+            } catch (err) {
+              showToast('Erro ao salvar ocorrência.', 'error');
+            }
+          };
+
+          const handleDelete = (id, typeName, empName) => {
+            if (!canDelete) return;
+            requestConfirm(`Tem certeza que deseja excluir a ocorrência: ${typeName} de ${empName}?`, async () => {
+              try {
+                await deleteDoc(doc(db, `${basePath}/occurrences/${id}`));
+                showToast('Ocorrência removida.', 'success');
+                logAction('Exclusão', 'Ocorrências', `Removeu ocorrência de ${empName}`);
+              } catch (e) {
+                showToast('Erro ao remover.', 'error');
+              }
+            });
+          };
+
+          const monthOptions = [
+            { value: 'all', label: 'Todos os Meses' },
+            { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' },
+            { value: '03', label: 'Março' }, { value: '04', label: 'Abril' },
+            { value: '05', label: 'Maio' }, { value: '06', label: 'Junho' },
+            { value: '07', label: 'Julho' }, { value: '08', label: 'Agosto' },
+            { value: '09', label: 'Setembro' }, { value: '10', label: 'Outubro' },
+            { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' }
+          ];
+          
+          const yearOptions = [
+            { value: 'all', label: 'Todos os Anos' },
+            { value: currentYearStr, label: currentYearStr },
+            ...[...new Set(occurrences.map(o => o.date?.substring(0, 4) || ''))].filter(Boolean).filter(y => y !== currentYearStr).sort().reverse().map(y => ({ value: y, label: y }))
+          ];
+
+          const tab1Filtered = occurrences.filter(o => {
+            if (!o.date) return false;
+            const parts = o.date.includes('/') ? o.date.split('/') : o.date.split('-');
+            const y = parts.length === 3 ? (o.date.includes('/') ? parts[2] : parts[0]) : '';
+            const m = parts.length === 3 ? (o.date.includes('/') ? parts[1] : parts[1]) : '';
+            const matchMonth = tab1FilterMonth === 'all' || m === tab1FilterMonth;
+            const matchYear = tab1FilterYear === 'all' || y === tab1FilterYear;
+            return matchMonth && matchYear;
+          }).sort((a,b) => parseDt(b.date) - parseDt(a.date));
+
+          const tab2Filtered = occurrences.filter(o => {
+            if (!o.date) return false;
+            const parts = o.date.includes('/') ? o.date.split('/') : o.date.split('-');
+            const y = parts.length === 3 ? (o.date.includes('/') ? parts[2] : parts[0]) : '';
+            const m = parts.length === 3 ? (o.date.includes('/') ? parts[1] : parts[1]) : '';
+            
+            const matchMonth = tab2FilterMonth === 'all' || m === tab2FilterMonth;
+            const matchYear = tab2FilterYear === 'all' || y === tab2FilterYear;
+            
+            const empObj = employees.find(e => e.id === o.employeeId);
+            const empSector = empObj ? empObj.workSector : '';
+            const empNameVal = o.employeeName || (empObj ? empObj.name : '');
+            
+            const matchName = tab2SearchName.length === 0 || empNameVal.toLowerCase().includes(tab2SearchName.toLowerCase());
+            const matchPenalty = tab2Penalty === 'all' || o.type === tab2Penalty;
+            const matchReason = tab2Reason === 'all' || o.reason === tab2Reason;
+            const matchSector = tab2Sector === 'all' || empSector === tab2Sector;
+
+            return matchMonth && matchYear && matchName && matchPenalty && matchReason && matchSector;
+          }).sort((a, b) => parseDt(b.date) - parseDt(a.date));
+
+          const reportSummary = Object.values(tab2Filtered.reduce((acc, curr) => {
+             const empObj = employees.find(e => e.id === curr.employeeId);
+             const resolvedName = curr.employeeName || (empObj ? empObj.name : 'Desconhecido');
+             if (!acc[curr.employeeId]) acc[curr.employeeId] = { id: curr.employeeId, name: resolvedName, count: 0, occurrences: [] };
+             acc[curr.employeeId].count += 1;
+             acc[curr.employeeId].occurrences.push(curr);
+             return acc;
+          }, {})).sort((a,b) => b.count - a.count);
+
+          return (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <div>
+                  <h2 className="text-3xl font-bold tracking-tight">Ocorrências</h2>
+                  <p className="text-slate-500 mt-1">Registro e controle de advertências e suspensões</p>
+                </div>
+                {canWrite && <Button theme={theme} icon={Plus} onClick={() => setIsModalOpen(true)}>Novo Registro</Button>}
+              </div>
+
+              <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full mb-6 overflow-x-auto custom-scrollbar">
+                <button onClick={() => setActiveSubTab('registros')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'registros' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Registros</button>
+                <button onClick={() => setActiveSubTab('relatorio')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'relatorio' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Relatório Mensal</button>
+              </div>
+
+              {activeSubTab === 'registros' && (
+                <div className="space-y-6">
+                  <div className="flex flex-wrap gap-4 mb-4 p-1">
+                    <div className="w-48 relative focus-within:z-10">
+                      <Select theme={theme} value={tab1FilterMonth} onChange={e => setTab1FilterMonth(e.target.value)} options={monthOptions} label="Filtrar por Mês" />
+                    </div>
+                    <div className="w-48 relative focus-within:z-10">
+                      <Select theme={theme} value={tab1FilterYear} onChange={e => setTab1FilterYear(e.target.value)} options={yearOptions} label="Filtrar por Ano" />
+                    </div>
+                  </div>
+                  
+                  <Card className="overflow-hidden">
+                    <div className="overflow-x-auto custom-scrollbar">
+                      <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                            <th className="p-4 font-medium">Data</th>
+                            <th className="p-4 font-medium">Funcionário</th>
+                            <th className="p-4 font-medium">Penalidade</th>
+                            <th className="p-4 font-medium w-1/3">Motivo</th>
+                            {(canWrite || canDelete) && <th className="p-4 font-medium text-right">Ações</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {tab1Filtered.map(occ => {
+                            const empObj = employees.find(e => e.id === occ.employeeId);
+                            const sectorTag = empObj ? empObj.workSector : '';
+                            return (
+                              <tr key={occ.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                <td className="p-4 text-sm font-medium">{renderDate(occ.date)}</td>
+                                <td className="p-4 text-sm font-medium">
+                                  {occ.employeeName || (empObj ? empObj.name : '')}
+                                  {sectorTag && <span className="ml-2 px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-xs rounded-md text-slate-500">{sectorTag}</span>}
+                                </td>
+                                <td className="p-4">
+                                  <span className={`px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800`}>
+                                    {occ.type}
+                                  </span>
+                                </td>
+                                <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
+                                  {occ.reason}
+                                </td>
+                                {(canWrite || canDelete) && (
+                                  <td className="p-4 text-right">
+                                    {canDelete && (
+                                      <button onClick={() => handleDelete(occ.id, occ.type, occ.employeeName)} className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors" title="Excluir Ocorrência">
+                                        <Trash2 size={18} />
+                                      </button>
+                                    )}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                          {tab1Filtered.length === 0 && (
+                            <tr><td colSpan={(canWrite || canDelete) ? "5" : "4"} className="p-8 text-center text-slate-500">Nenhum registro para as datas selecionadas.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </div>
+              )}
+
+              {activeSubTab === 'relatorio' && (
+                <div className="space-y-6">
+                  <Card className="p-6 overflow-visible relative z-20 shadow-md">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                      <div className="xl:col-span-2 relative focus-within:z-10">
+                         <Input label="Buscar Usuário" type="text" placeholder="Nome do colaborador..." theme={theme} value={tab2SearchName} onChange={e => setTab2SearchName(e.target.value)} />
+                      </div>
+                      <div className="relative focus-within:z-10">
+                        <Select theme={theme} value={tab2FilterMonth} onChange={e => setTab2FilterMonth(e.target.value)} options={monthOptions} label="Mês" />
+                      </div>
+                      <div className="relative focus-within:z-10">
+                        <Select theme={theme} value={tab2FilterYear} onChange={e => setTab2FilterYear(e.target.value)} options={yearOptions} label="Ano" />
+                      </div>
+                      <div className="relative focus-within:z-10">
+                        <Select theme={theme} value={tab2Sector} onChange={e => setTab2Sector(e.target.value)} options={[{value:'all',label:'Todos Setores'}, ...SECTORS.map(s => ({value:s,label:s}))]} label="Setor" />
+                      </div>
+                      <div className="xl:col-span-2 relative focus-within:z-10">
+                        <Select theme={theme} value={tab2Penalty} onChange={e => setTab2Penalty(e.target.value)} options={[{value:'all',label:'Todas'}, ...PUNITIVE_TYPES.map(p => ({value:p,label:p}))]} label="Penalidade" />
+                      </div>
+                      <div className="xl:col-span-3 relative focus-within:z-10">
+                        <Select theme={theme} value={tab2Reason} onChange={e => setTab2Reason(e.target.value)} options={[{value:'all',label:'Todos'}, ...REASONS.map(r => ({value:r,label:r}))]} label="Motivo" />
+                      </div>
+                    </div>
+                  </Card>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative w-full mb-6">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                      <h3 className="text-slate-500 text-sm font-medium mb-1">Total de Advertências</h3>
+                      <p className={`text-3xl font-bold ${theme.text}`}>{tab2Filtered.length}</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                      <h3 className="text-slate-500 text-sm font-medium mb-1">Colaboradores Penalizados</h3>
+                      <p className={`text-3xl font-bold text-amber-500`}>{reportSummary.length}</p>
+                    </div>
+                  </div>
+
+                  <Card className="p-6 shadow-md min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                       Geral por Colaborador
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500">
+                          <tr>
+                            <th className="p-4 font-medium rounded-l-lg">Colaborador</th>
+                            <th className="p-4 font-medium text-center">Quant. Ocorrências</th>
+                            <th className="p-4 font-medium">Histórico Recente</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                           {reportSummary.map(report => (
+                             <tr key={report.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                               <td className="p-4 font-medium">{report.name}</td>
+                               <td className="p-4 text-center">
+                                 <span className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 font-bold px-3 py-1 rounded-full">{report.count}</span>
+                               </td>
+                               <td className="p-4 text-xs text-slate-500">
+                                  {report.occurrences.map(o => `${o.type} (${renderDate(o.date)})`).join(', ')}
+                               </td>
+                             </tr>
+                           ))}
+                           {reportSummary.length === 0 && (
+                             <tr><td colSpan="3" className="p-8 text-center text-slate-500">Nenhum registro encontrado para este período.</td></tr>
+                           )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </div>
+              )}
+
+              <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Ocorrência">
+                <form onSubmit={handleSave} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input label="Data da Aplicação" type="text" placeholder="DD/MM/AAAA" maxLength="10" theme={theme} required value={formData.date} onChange={handleDateChange} />
+                    <Select 
+                      label="Colaborador" className="z-50" theme={theme} required search 
+                      value={formData.employeeId} 
+                      onChange={handleEmployeeChange}
+                      options={activeEmployees.map(e => ({ value: e.id, label: e.name }))} 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Select 
+                      label="Penalidade" className="z-40" theme={theme} required 
+                      value={formData.type} 
+                      onChange={val => setFormData({...formData, type: val})}
+                      options={getTypeOptionsSafe(formData.employeeId)}
+                      disabled={!formData.employeeId}
+                    />
+                    <Select 
+                      label="Motivo" className="z-30" theme={theme} required 
+                      value={formData.reason} 
+                      onChange={val => setFormData({...formData, reason: val})}
+                      options={REASONS.map(r => ({ value: r, label: r }))} 
+                    />
+                  </div>
+                  
+                  {formData.employeeId && (
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mt-2 flex items-center gap-2">
+                       <History size={16} className="text-slate-400 flex-shrink-0" />
+                       <p className="text-xs text-slate-500 dark:text-slate-400">{lastWarningStr(formData.employeeId)}</p>
+                    </div>
+                  )}
+
+                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                    <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                    {canWrite && <Button variant="primary" theme={theme} type="submit">Registrar</Button>}
+                  </div>
+                </form>
+              </Modal>
+            </div>
+          );
+        }
+
         function SystemUsersView({ theme, basePath, systemUsers, showToast, logAction, firebaseConfig, requestConfirm, appUser }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [editingId, setEditingId] = useState(null);
@@ -8536,6 +8935,7 @@
             { id: 'employees', label: 'Colaboradores' },
             { id: 'payments', label: 'Pagamentos' },
             { id: 'disciplinary', label: 'Solicitações' },
+            { id: 'occurrences', label: 'Ocorrências' },
             { id: 'systemUsers', label: 'Usuários' },
             { id: 'logs', label: 'Histórico de Logs' }
           ];
@@ -8550,6 +8950,7 @@
               employees: { read: true, write: true, delete: true }, 
               payments: { read: true, write: true, delete: true }, 
               disciplinary: { read: true, write: true, delete: true },
+              occurrences: { read: true, write: true, delete: true },
               systemUsers: { read: true, write: true, delete: true },
               logs: { read: true, write: false, delete: false }
             },
@@ -8562,6 +8963,7 @@
               employees: { read: true, write: true, delete: false }, 
               payments: { read: true, write: false, delete: false }, 
               disciplinary: { read: true, write: true, delete: false },
+              occurrences: { read: true, write: true, delete: false },
               systemUsers: { read: false, write: false, delete: false },
               logs: { read: false, write: false, delete: false }
             },
@@ -8574,6 +8976,7 @@
               employees: { read: true, write: false, delete: false }, 
               payments: { read: true, write: true, delete: false }, 
               disciplinary: { read: true, write: false, delete: false },
+              occurrences: { read: false, write: false, delete: false },
               systemUsers: { read: false, write: false, delete: false },
               logs: { read: false, write: false, delete: false }
             },
