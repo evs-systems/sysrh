@@ -25,6 +25,7 @@ Sistema interno de gestão de **Recursos Humanos** e **Financeiro**, desenvolvid
 - **Dashboard** — Visão geral com estatísticas, aniversariantes, alertas e mensagem motivacional diária
 - **Agenda** — Calendário de eventos e compromissos
 - **Solicitações** — Registro e acompanhamento de adiantamentos, desligamentos e demais processos
+- **Ocorrências** — Registro e controle de advertências aplicadas com progressão automática de penalidades, filtros por mês/ano, relatório consolidado por colaborador e busca avançada
 - **Relatórios** — Geração de relatórios com opção de impressão
 - **Chat Interno** — Mensagens diretas e grupos por setor com notificações em tempo real
 - **Histórico de Logs** — Registro imutável de todas as ações realizadas no sistema
