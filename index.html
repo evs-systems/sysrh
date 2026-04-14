@@ -1007,7 +1007,7 @@
 
                 <div className="flex-1 h-full overflow-y-auto pr-4 md:pr-6 custom-scrollbar min-w-0">
                   <div className="w-full max-w-[1600px] mx-auto space-y-6 pb-20">
-                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} companies={companies} events={events} />}
+                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} occurrences={occurrences} companies={companies} events={events} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
@@ -1458,7 +1458,7 @@
           );
         }
 
-        function DashboardView({ theme, appUser, employees, payments, disciplinary, companies, events }) {
+        function DashboardView({ theme, appUser, employees, payments, disciplinary, occurrences, companies, events }) {
           // Função inteligente para checar a matriz de permissões do usuário logado
           const checkAccess = (mod) => {
              if (appUser?.sector === 'Administração') return true;
@@ -1468,17 +1468,35 @@
           const showEmp = checkAccess('employees');
           const showPay = checkAccess('payments');
           const showDisc = checkAccess('disciplinary');
+          const showOcc = checkAccess('occurrences');
           const showVac = checkAccess('vacations');
           const showComp = checkAccess('companies'); // Permissão para ver certificados
           const showCal = checkAccess('calendar'); // Permissão para ver agenda
 
           const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
 
+          const todayDateObj = new Date();
+          const currentDayStr = String(todayDateObj.getDate()).padStart(2, '0');
+          const currentMonthStr = String(todayDateObj.getMonth() + 1).padStart(2, '0');
+          const currentYear = todayDateObj.getFullYear();
+
+          let monthOccurrences = 0;
+          if (showOcc && occurrences) {
+            monthOccurrences = occurrences.filter(o => {
+              if (!o.date) return false;
+              const parts = o.date.includes('/') ? o.date.split('/') : o.date.split('-');
+              const m = parts.length === 3 ? (o.date.includes('/') ? parts[1] : parts[1]) : '';
+              const y = parts.length === 3 ? (o.date.includes('/') ? parts[2] : parts[0]) : '';
+              return m === currentMonthStr && y === String(currentYear);
+            }).length;
+          }
+
           // Renderiza os cards superiores apenas se o usuário tiver permissão daquela área
           const stats = [];
           if (showEmp) stats.push({ title: 'Total de Funcionários Ativos', value: activeEmployees.length, icon: Users, color: 'text-blue-500' });
           if (showPay) stats.push({ title: 'Total Pago (Mês)', value: formatCurrency(payments.reduce((acc, curr) => acc + Number(curr.amount), 0)), icon: DollarSign, color: 'text-emerald-500' });
           if (showDisc) stats.push({ title: 'Solicitações Ativas', value: disciplinary.filter(d => d.status !== 'Finalizado').length, icon: FileText, color: 'text-amber-500' });
+          if (showOcc) stats.push({ title: 'Ocorrências no Mês', value: monthOccurrences, icon: AlertTriangle, color: 'text-rose-500' });
 
           const estoqueCount = activeEmployees.filter(e => e.workSector === 'Estoque').length;
           const adminCount = activeEmployees.filter(e => e.workSector === 'Administrativo').length;
@@ -1494,11 +1512,6 @@
               unitsCount[e.unit] = (unitsCount[e.unit] || 0) + 1;
             }
           });
-
-          const todayDateObj = new Date();
-          const currentDayStr = String(todayDateObj.getDate()).padStart(2, '0');
-          const currentMonthStr = String(todayDateObj.getMonth() + 1).padStart(2, '0');
-          const currentYear = todayDateObj.getFullYear();
 
           // Lógica de Mensagens Motivacionais Diárias
           const motivationalMessages = [
@@ -1763,7 +1776,7 @@
               </Card>
 
               {stats.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className={`grid grid-cols-1 md:grid-cols-2 ${stats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6`}>
                   {stats.map((stat, i) => (
                     <Card key={i} className="p-6 flex items-center gap-5 hover:-translate-y-1 transition-transform duration-300">
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-700/50 ${stat.color}`}>
