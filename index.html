@@ -1013,7 +1013,7 @@
 
                 <div className="flex-1 h-full overflow-y-auto pr-4 md:pr-6 custom-scrollbar min-w-0">
                   <div className="w-full max-w-[1600px] mx-auto space-y-6 pb-20">
-                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} occurrences={occurrences} companies={companies} events={events} />}
+                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} occurrences={occurrences} companies={companies} events={events} commercialRooms={commercialRooms} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
@@ -1464,7 +1464,7 @@
           );
         }
 
-        function DashboardView({ theme, appUser, employees, payments, disciplinary, occurrences, companies, events }) {
+        function DashboardView({ theme, appUser, employees, payments, disciplinary, occurrences, companies, events, commercialRooms }) {
           // Função inteligente para checar a matriz de permissões do usuário logado
           const checkAccess = (mod) => {
              if (appUser?.sector === 'Administração') return true;
@@ -1712,6 +1712,31 @@
           }
           // Ordena os certificados para os mais críticos (menor prazo) aparecerem primeiro
           expiringCertificates.sort((a, b) => a._diffDays - b._diffDays);
+
+          // Lógica para Contratos de Salas Comerciais a vencer (Próximos 45 dias ou vencidos)
+          const expiringCommercialRooms = [];
+          if (commercialRooms && Array.isArray(commercialRooms)) {
+            commercialRooms.forEach(room => {
+              if (room.rentExpirationDate && room.rentExpirationDate.length === 10) {
+                 const [d, m, y] = room.rentExpirationDate.split('/');
+                 const expDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                 if (!isNaN(expDate.getTime())) {
+                    const limitDate = new Date(expDate);
+                    limitDate.setDate(limitDate.getDate() - 45); // Alerta de 45 dias
+                    if (normalizedToday >= limitDate || normalizedToday > expDate) {
+                        const diffTime = expDate.getTime() - normalizedToday.getTime();
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        expiringCommercialRooms.push({
+                           ...room,
+                           _diffDays: diffDays,
+                           _expDateObj: expDate
+                        });
+                    }
+                 }
+              }
+            });
+            expiringCommercialRooms.sort((a,b) => a._expDateObj - b._expDateObj);
+          }
 
           // Lógica para listar todos os funcionários atualmente em período de experiência
           const probationEmployees = [];
@@ -1990,6 +2015,32 @@
                         );
                       })}
                       {expiringCertificates.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum certificado vencendo nos próximos 30 dias.</p>}
+                    </div>
+                  </Card>
+                )}
+
+                {showComp && (
+                  <Card className="p-6 min-w-0">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <FileText size={20} className="text-blue-500 flex-shrink-0" /> Contratos de Locação (Salas)
+                    </h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {expiringCommercialRooms.map(room => {
+                        const isOverdue = room._diffDays < 0;
+                        const isToday = room._diffDays === 0;
+                        return (
+                          <div key={`room-${room.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 min-w-0">
+                            <div className="flex flex-col min-w-0 flex-1 mr-2">
+                              <span className="font-medium truncate">{room.localName} - Sala {room.roomNumber}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Vencimento: {room.rentExpirationDate}</span>
+                            </div>
+                            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase flex-shrink-0 ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : isToday ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                              {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Em ${room._diffDays} dias`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {expiringCommercialRooms.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum contrato de locação vencendo nos próximos 45 dias.</p>}
                     </div>
                   </Card>
                 )}
@@ -5034,7 +5085,7 @@
             linkedCnpjCompanyId: '', email: '', broker: '', contactPhone: '', contactName: '', 
             buildingContactType: 'telefone', buildingContactValue: '', buildingContactName: '',
             cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '',
-            rentContractName: '', rentContractUrl: ''
+            rentContractName: '', rentContractUrl: '', rentExpirationDate: ''
           };
           const [roomFormData, setRoomFormData] = useState(initialRoomState);
           
@@ -5954,7 +6005,10 @@
                      </div>
 
                      <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Documentos Anexados</h3>
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Documento e Vigência de Contrato</h3>
+                        <div className="md:w-1/2">
+                          <Input label="Data de Vencimento do Contrato (Opcional para alertas)" placeholder="DD/MM/AAAA" theme={theme} value={roomFormData.rentExpirationDate || ''} onChange={e => setRoomFormData({...roomFormData, rentExpirationDate: formatDateInput(e.target.value)})} />
+                        </div>
                         <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
                           {roomFormData.rentContractUrl ? (
                             <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
