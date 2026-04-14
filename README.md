@@ -18,6 +18,7 @@ Sistema interno de gestão de **Recursos Humanos** e **Financeiro**, desenvolvid
 
 ### 🏢 Gestão Empresarial
 - **Empresas** — Cadastro de empresas com CNPJ, contrato social e certificados digitais
+- **Salas Comerciais** — Gestão de localização, locatários, contatos da corretora e armazenamento de contratos de locação
 - **Certificados** — Alertas automáticos de vencimento (30 dias)
 - **Contratos** — Monitoramento de contratos a vencer
 
