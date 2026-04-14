@@ -5024,6 +5024,7 @@
           // Novos estados para Busca e Filtro de Certificados
           const [certSearchTerm, setCertSearchTerm] = useState('');
           const [certModelFilter, setCertModelFilter] = useState('');
+          const [selectedCertsToDownload, setSelectedCertsToDownload] = useState([]);
           
           // Estados para Salas Comerciais
           const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
@@ -5426,6 +5427,27 @@
           const hasA1 = (formData.certificates || []).some(c => c.model === 'A1');
           const hasA3 = (formData.certificates || []).some(c => c.model === 'A3');
 
+          const handleDownloadSelectedCerts = () => {
+             const certsToDls = filteredCertRows.filter(c => selectedCertsToDownload.includes(c.certId) && c.certFileUrl);
+             if (certsToDls.length === 0) return;
+             
+             certsToDls.forEach((cert, index) => {
+                 setTimeout(() => {
+                     const a = document.createElement('a');
+                     a.href = cert.certFileUrl;
+                     a.target = '_blank';
+                     a.download = cert.certFileName || 'Certificado';
+                     document.body.appendChild(a);
+                     a.click();
+                     document.body.removeChild(a);
+                 }, index * 500);
+             });
+             
+             showToast(`${certsToDls.length} certificado(s) enviados para download!`, 'success');
+             setSelectedCertsToDownload([]);
+          };
+
+
           return (
             <div className="space-y-6 animate-in fade-in duration-500">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
@@ -5433,11 +5455,18 @@
                   <h2 className="text-3xl font-bold tracking-tight">Empresas (CNPJs)</h2>
                   <p className="text-slate-500 mt-1">Gerencie os CNPJs para os quais os funcionários são registrados e Salas Comerciais.</p>
                 </div>
-                {canWrite && (
-                  <Button theme={theme} icon={Plus} onClick={() => activeSubTab === 'salas' ? openRoomModal() : openModal()}>
-                    {activeSubTab === 'salas' ? 'Nova Sala Comercial' : 'Nova Empresa'}
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {canWrite && activeSubTab !== 'certificados' && (
+                    <Button theme={theme} icon={Plus} onClick={() => activeSubTab === 'salas' ? openRoomModal() : openModal()}>
+                      {activeSubTab === 'salas' ? 'Nova Sala Comercial' : 'Nova Empresa'}
+                    </Button>
+                  )}
+                  {activeSubTab === 'certificados' && (
+                    <Button theme={theme} icon={Download} disabled={selectedCertsToDownload.length === 0} onClick={handleDownloadSelectedCerts}>
+                      Baixar Selecionados ({selectedCertsToDownload.length})
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full mb-6 overflow-x-auto custom-scrollbar">
@@ -5558,6 +5587,20 @@
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                          <th className="p-4 w-12 text-center">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedCertsToDownload(filteredCertRows.filter(c => c.certFileUrl).map(c => c.certId));
+                                } else {
+                                  setSelectedCertsToDownload([]);
+                                }
+                              }}
+                              checked={selectedCertsToDownload.length > 0 && selectedCertsToDownload.length === filteredCertRows.filter(c => c.certFileUrl).length}
+                            />
+                          </th>
                           <th className="p-4 font-medium">Nome da Empresa</th>
                           <th className="p-4 font-medium">Modelo</th>
                           <th className="p-4 font-medium">Data de Vencimento</th>
@@ -5589,7 +5632,25 @@
                           }
 
                           return (
-                            <tr key={comp.certId} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <tr key={comp.certId} className={`border-b border-slate-100 dark:border-slate-800/50 transition-colors ${selectedCertsToDownload.includes(comp.certId) ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}>
+                              <td className="p-4 text-center">
+                                {comp.certFileUrl ? (
+                                  <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                    checked={selectedCertsToDownload.includes(comp.certId)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedCertsToDownload([...selectedCertsToDownload, comp.certId]);
+                                      } else {
+                                        setSelectedCertsToDownload(selectedCertsToDownload.filter(id => id !== comp.certId));
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-slate-300">-</span>
+                                )}
+                              </td>
                               <td className="p-4 font-medium text-slate-900 dark:text-white">
                                 {comp.name}
                                 <div className="text-xs text-slate-500">{comp.cnpj}</div>
@@ -5637,7 +5698,7 @@
                           )
                         })}
                         {filteredCertRows.length === 0 && (
-                          <tr><td colSpan="6" className="p-8 text-center text-slate-500">Nenhum certificado digital encontrado.</td></tr>
+                          <tr><td colSpan="7" className="p-8 text-center text-slate-500">Nenhum certificado digital encontrado.</td></tr>
                         )}
                       </tbody>
                     </table>
