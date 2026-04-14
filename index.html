@@ -8941,7 +8941,7 @@
           const [tab2Reason, setTab2Reason] = useState('all');
           
           const defaultDate = new Date().toISOString().split('T')[0].split('-').reverse().join('/');
-          const [formData, setFormData] = useState({ date: defaultDate, employeeId: '', reason: 'Falta', type: '' });
+          const [formData, setFormData] = useState({ date: defaultDate, employeeId: '', reason: 'Falta', type: '', reference: '' });
 
           const handleDateChange = (e) => {
             let v = e.target.value.replace(/\D/g, '');
@@ -9043,7 +9043,7 @@
               });
               showToast('Ocorrência registrada com sucesso!', 'success');
               logAction('Cadastro', 'Ocorrências', `Registrou ${formData.type} para ${empData?.name}`);
-              setFormData({ date: defaultDate, employeeId: '', reason: 'Falta', type: '' });
+              setFormData({ date: defaultDate, employeeId: '', reason: 'Falta', type: '', reference: '' });
               setIsModalOpen(false);
             } catch (err) {
               showToast('Erro ao salvar ocorrência.', 'error');
@@ -9175,6 +9175,7 @@
                                 </td>
                                 <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
                                   {occ.reason}
+                                  {occ.reference && <div className="text-[10px] text-slate-400 mt-1 font-medium">Ref: {occ.reference}</div>}
                                 </td>
                                 {(canWrite || canDelete) && (
                                   <td className="p-4 text-right">
@@ -9296,6 +9297,14 @@
                       options={REASONS.map(r => ({ value: r, label: r }))} 
                     />
                   </div>
+                  
+                  <Input 
+                    label="Referência da Infração (Dias ou ocorrências geradoras)" 
+                    theme={theme} 
+                    value={formData.reference || ''} 
+                    onChange={e => setFormData({...formData, reference: e.target.value})} 
+                    placeholder="Ex: Falta injustificada do dia 12/04 / Atrasos dos dias 10 e 11" 
+                  />
                   
                   {formData.employeeId && (
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mt-2 flex items-center gap-2">
