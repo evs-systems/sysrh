@@ -518,6 +518,7 @@
 
           // Data State
           const [companies, setCompanies] = useState([]);
+          const [commercialRooms, setCommercialRooms] = useState([]);
           const [employees, setEmployees] = useState([]);
           const [payments, setPayments] = useState([]);
           const [disciplinary, setDisciplinary] = useState([]);
@@ -596,6 +597,10 @@
               (snapshot) => { setCompanies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
+            const unsubCommercialRooms = onSnapshot(collection(db, `${basePath}/commercialRooms`), 
+              (snapshot) => { setCommercialRooms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
+              handleSnapError
+            );
             const unsubEmployees = onSnapshot(collection(db, `${basePath}/employees`), 
               (snapshot) => { setEmployees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
@@ -624,6 +629,7 @@
             return () => {
               unsubSystemUsers();
               unsubCompanies();
+              unsubCommercialRooms();
               unsubEmployees();
               unsubPayments();
               unsubDisciplinary();
@@ -1012,7 +1018,7 @@
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
                     {activeTab === 'benefits' && <BenefitsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} />}
-                    {activeTab === 'companies' && <CompaniesView theme={theme} basePath={basePath} appUser={appUser} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
+                    {activeTab === 'companies' && <CompaniesView theme={theme} basePath={basePath} appUser={appUser} companies={companies} commercialRooms={commercialRooms} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'employees' && <EmployeesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'payments' && <PaymentsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} payments={payments} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'disciplinary' && <DisciplinaryView theme={theme} basePath={basePath} appUser={appUser} employees={employees} disciplinary={disciplinary} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
@@ -5010,7 +5016,7 @@
           );
         }
 
-        function CompaniesView({ theme, basePath, appUser, companies, showToast, logAction, requestConfirm }) {
+        function CompaniesView({ theme, basePath, appUser, companies, commercialRooms = [], showToast, logAction, requestConfirm }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [editingId, setEditingId] = useState(null);
           const [activeSubTab, setActiveSubTab] = useState('empresas');
@@ -5018,6 +5024,18 @@
           // Novos estados para Busca e Filtro de Certificados
           const [certSearchTerm, setCertSearchTerm] = useState('');
           const [certModelFilter, setCertModelFilter] = useState('');
+          
+          // Estados para Salas Comerciais
+          const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
+          const [editingRoomId, setEditingRoomId] = useState(null);
+          const initialRoomState = {
+            localName: '', roomNumber: '', tenantType: '', tenantCompanyId: '', tenantCustomName: '', 
+            linkedCnpjCompanyId: '', email: '', broker: '', contactPhone: '', contactName: '', 
+            buildingContactType: 'telefone', buildingContactValue: '', buildingContactName: '',
+            cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '',
+            rentContractName: '', rentContractUrl: ''
+          };
+          const [roomFormData, setRoomFormData] = useState(initialRoomState);
           
           const initialFormState = {
             name: '', cnpj: '', stateRegistration: '', openingDate: '', regime: 'Simples Nacional',
@@ -5073,6 +5091,28 @@
                     state: data.uf || prev.state
                   }));
                   showToast('Endereço preenchido via CEP!', 'success');
+                }
+              } catch (err) {
+                console.error("Erro ao buscar CEP:", err);
+              }
+            }
+          };
+
+          const handleRoomCepBlur = async () => {
+            const cepNumber = roomFormData.cep.replace(/\D/g, '');
+            if (cepNumber.length === 8) {
+              try {
+                const res = await fetch(`https://viacep.com.br/ws/${cepNumber}/json/`);
+                const data = await res.json();
+                if (!data.erro) {
+                  setRoomFormData(prev => ({
+                    ...prev,
+                    street: data.logradouro || prev.street,
+                    neighborhood: data.bairro || prev.neighborhood,
+                    city: data.localidade || prev.city,
+                    state: data.uf || prev.state
+                  }));
+                  showToast('Endereço da sala preenchido via CEP!', 'success');
                 }
               } catch (err) {
                 console.error("Erro ao buscar CEP:", err);
@@ -5137,6 +5177,48 @@
                 socialContractUrl: ''
               }));
               logAction('Exclusão', 'Empresas', `Removeu o Contrato Social da empresa ${formData.name}`);
+            });
+          };
+
+          const handleRentContractUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) { 
+              showToast(`O arquivo excede o limite de 5MB.`, 'error');
+              e.target.value = '';
+              return;
+            }
+            if (file.type !== 'application/pdf') {
+              showToast(`Apenas arquivos PDF são permitidos para o contrato de locação.`, 'error');
+              e.target.value = '';
+              return;
+            }
+
+            try {
+              showToast('Enviando contrato de locação, aguarde...', 'success');
+              const fileId = generateId();
+              const fileRef = ref(storage, `commercialRooms/${fileId}_${file.name}`);
+              await uploadBytes(fileRef, file);
+              const url = await getDownloadURL(fileRef);
+              
+              setRoomFormData(prev => ({
+                ...prev,
+                rentContractName: file.name,
+                rentContractUrl: url
+              }));
+              logAction('Anexo', 'Salas Comerciais', `Anexou Contrato de Locação da sala ${roomFormData.localName || 'Nova Sala'}`);
+              showToast('Contrato de Locação anexado com sucesso!');
+            } catch (err) {
+              showToast(`Erro ao processar o arquivo. Verifique sua conexão.`, 'error');
+            }
+            e.target.value = ''; 
+          };
+
+          const removeRentContract = () => {
+            requestConfirm('Tem certeza que deseja remover o Contrato de Locação anexado?', () => {
+              setRoomFormData(prev => ({ ...prev, rentContractName: '', rentContractUrl: '' }));
+              logAction('Exclusão', 'Salas Comerciais', `Removeu o Contrato de Locação da sala ${roomFormData.localName || 'Nova Sala'}`);
             });
           };
 
@@ -5260,6 +5342,50 @@
             });
           };
 
+          const openRoomModal = (room = null) => {
+            if (!canWrite) return;
+            if (room) {
+              setEditingRoomId(room.id);
+              setRoomFormData({ ...initialRoomState, ...room });
+            } else {
+              setEditingRoomId(null);
+              setRoomFormData(initialRoomState);
+            }
+            setIsRoomModalOpen(true);
+          };
+
+          const handleRoomSave = async (e) => {
+            e.preventDefault();
+            if (!canWrite) return;
+            try {
+              if (editingRoomId) {
+                await updateDoc(doc(db, `${basePath}/commercialRooms/${editingRoomId}`), roomFormData);
+                logAction('Atualização', 'Empresas', `Atualizou a sala ${roomFormData.localName} - ${roomFormData.roomNumber}`);
+                showToast('Sala Comercial atualizada com sucesso!');
+              } else {
+                await addDoc(collection(db, `${basePath}/commercialRooms`), roomFormData);
+                logAction('Cadastro', 'Empresas', `Cadastrou a sala ${roomFormData.localName} - ${roomFormData.roomNumber}`);
+                showToast('Sala Comercial cadastrada com sucesso!');
+              }
+              setIsRoomModalOpen(false);
+            } catch (err) {
+              showToast('Erro ao salvar sala.', 'error');
+            }
+          };
+
+          const handleRoomDelete = (id, name) => {
+            if (!canDelete) return;
+            requestConfirm(`Excluir a sala ${name} do sistema?`, async () => {
+              try {
+                await deleteDoc(doc(db, `${basePath}/commercialRooms/${id}`));
+                logAction('Exclusão', 'Empresas', `Removeu a sala ${name}`);
+                showToast('Sala removida.');
+              } catch (err) {
+                showToast('Erro ao remover sala.', 'error');
+              }
+            });
+          };
+
           const toggleTablePassword = (certId) => {
              setShowTablePasswords(prev => ({ ...prev, [certId]: !prev[certId] }));
           };
@@ -5305,14 +5431,19 @@
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                 <div>
                   <h2 className="text-3xl font-bold tracking-tight">Empresas (CNPJs)</h2>
-                  <p className="text-slate-500 mt-1">Gerencie os CNPJs para os quais os funcionários são registrados.</p>
+                  <p className="text-slate-500 mt-1">Gerencie os CNPJs para os quais os funcionários são registrados e Salas Comerciais.</p>
                 </div>
-                {canWrite && <Button theme={theme} icon={Plus} onClick={() => openModal()}>Nova Empresa</Button>}
+                {canWrite && (
+                  <Button theme={theme} icon={Plus} onClick={() => activeSubTab === 'salas' ? openRoomModal() : openModal()}>
+                    {activeSubTab === 'salas' ? 'Nova Sala Comercial' : 'Nova Empresa'}
+                  </Button>
+                )}
               </div>
 
               <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl w-fit max-w-full mb-6 overflow-x-auto custom-scrollbar">
                 <button onClick={() => setActiveSubTab('empresas')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'empresas' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Cadastro de Empresas</button>
                 <button onClick={() => setActiveSubTab('certificados')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'certificados' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Gestão de Certificados</button>
+                <button onClick={() => setActiveSubTab('salas')} className={`whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSubTab === 'salas' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Gestão de Salas Comerciais</button>
               </div>
 
               {/* Filtros da Aba de Certificados */}
@@ -5343,7 +5474,47 @@
 
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto custom-scrollbar">
-                  {activeSubTab === 'empresas' ? (
+                  {activeSubTab === 'salas' ? (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
+                          <th className="p-4 font-medium">Localização/Ref</th>
+                          <th className="p-4 font-medium">Sala</th>
+                          <th className="p-4 font-medium">Locatário / CNPJ</th>
+                          <th className="p-4 font-medium">Corretora</th>
+                          {(canWrite || canDelete) && <th className="p-4 font-medium text-right">Ações</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(commercialRooms || []).map(room => {
+                           const tenantCnpjComp = companies.find(c => c.id === room.linkedCnpjCompanyId);
+                           const linkedName = tenantCnpjComp ? tenantCnpjComp.name : '-';
+                           const tenantName = room.tenantType === 'outro' ? room.tenantCustomName : (companies.find(c => c.id === room.tenantCompanyId)?.name || '-');
+                           
+                           return (
+                              <tr key={room.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                <td className="p-4 font-medium text-slate-900 dark:text-white">{room.localName || '-'}</td>
+                                <td className="p-4 text-slate-600 dark:text-slate-300">{room.roomNumber || '-'}</td>
+                                <td className="p-4 text-slate-600 dark:text-slate-300 text-sm">
+                                   <div className="font-semibold text-slate-700 dark:text-slate-200">{tenantName}</div>
+                                   <div className="text-xs text-slate-400">Vinculado a: {linkedName}</div>
+                                </td>
+                                <td className="p-4 text-slate-600 dark:text-slate-300">{room.broker || '-'}</td>
+                                {(canWrite || canDelete) && (
+                                  <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                                    {canWrite && <button onClick={() => openRoomModal(room)} className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="Editar Sala"><Edit2 size={18} /></button>}
+                                    {canDelete && <button onClick={() => handleRoomDelete(room.id, `${room.localName} - ${room.roomNumber}`)} className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors" title="Excluir Sala"><Trash2 size={18} /></button>}
+                                  </td>
+                                )}
+                              </tr>
+                           );
+                        })}
+                        {(commercialRooms || []).length === 0 && (
+                          <tr><td colSpan={(canWrite || canDelete) ? "5" : "4"} className="p-8 text-center text-slate-500">Nenhuma sala comercial registrada.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  ) : activeSubTab === 'empresas' ? (
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-slate-200 dark:border-slate-700 text-sm text-slate-500 bg-slate-50/50 dark:bg-slate-800/30">
@@ -5671,6 +5842,102 @@
                   </div>
                 </form>
               </Modal>
+
+              {/* Modal de Gestão de Sala Comercial */}
+              <Modal isOpen={isRoomModalOpen} onClose={() => setIsRoomModalOpen(false)} title={editingRoomId ? "Editar Sala Comercial" : "Nova Sala Comercial"}>
+                  <form onSubmit={handleRoomSave} className="space-y-6">
+                     <div className="space-y-4">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Dados Básicos</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <Input label="Local (Referência)" theme={theme} value={roomFormData.localName} onChange={e => setRoomFormData({...roomFormData, localName: e.target.value})} placeholder="Edifício Principal, Logística Sul, etc." required />
+                           <Input label="Sala / Número" theme={theme} value={roomFormData.roomNumber} onChange={e => setRoomFormData({...roomFormData, roomNumber: e.target.value})} placeholder="Ex: 402, Térreo" required />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <Select label="Locatário" theme={theme} value={roomFormData.tenantType} onChange={e => {
+                                setRoomFormData({...roomFormData, tenantType: e.target.value, tenantCompanyId: e.target.value !== 'outro' ? e.target.value : '', tenantCustomName: ''});
+                              }} options={[...companies.map(c => ({value: c.id, label: c.name})), {value: 'outro', label: 'Outro (Digitar)'}]} required />
+                           {roomFormData.tenantType === 'outro' && (
+                              <Input label="Nome do Locatário (Outro)" theme={theme} value={roomFormData.tenantCustomName} onChange={e => setRoomFormData({...roomFormData, tenantCustomName: e.target.value})} placeholder="Nome completo do locatário livre" required />
+                           )}
+                           <Select label="CNPJ Vinculado" theme={theme} value={roomFormData.linkedCnpjCompanyId} onChange={e => setRoomFormData({...roomFormData, linkedCnpjCompanyId: e.target.value})} options={companies.map(c => ({value: c.id, label: c.name}))} required />
+                           <Input label="Corretora" theme={theme} value={roomFormData.broker} onChange={e => setRoomFormData({...roomFormData, broker: e.target.value})} placeholder="Nome Comercial da Imobiliária/Corretora" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <Input type="email" label="E-mail" theme={theme} value={roomFormData.email} onChange={e => setRoomFormData({...roomFormData, email: e.target.value})} placeholder="email@exemplo.com" />
+                           <Input label="Nome do Contato" theme={theme} value={roomFormData.contactName} onChange={e => setRoomFormData({...roomFormData, contactName: e.target.value})} placeholder="Nome do contato (Ex: João Supervisor)" />
+                           <Input label="Telefone do Contato" theme={theme} value={roomFormData.contactPhone} onChange={e => setRoomFormData({...roomFormData, contactPhone: formatPhoneMask(e.target.value)})} placeholder="(00) 00000-0000" />
+                        </div>
+                     </div>
+                     
+                     <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Contato com a Administradora do Prédio</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <Select label="Tipo de Contato" theme={theme} value={roomFormData.buildingContactType} onChange={e => setRoomFormData({...roomFormData, buildingContactType: e.target.value, buildingContactValue: '', buildingContactName: ''})} options={[{value: 'telefone', label: 'Telefone'}, {value: 'email', label: 'E-mail'}]} />
+                           <Input label="Valor do Contato" type={roomFormData.buildingContactType === 'email' ? 'email' : 'text'} theme={theme} value={roomFormData.buildingContactValue} onChange={e => setRoomFormData({...roomFormData, buildingContactValue: roomFormData.buildingContactType === 'telefone' ? formatPhoneMask(e.target.value) : e.target.value})} placeholder={roomFormData.buildingContactType === 'telefone' ? '(00) 00000-0000' : 'admin@predio.com'} required />
+                           {roomFormData.buildingContactType === 'telefone' && (
+                              <Input label="Nome do Contato do Prédio" theme={theme} value={roomFormData.buildingContactName || ''} onChange={e => setRoomFormData({...roomFormData, buildingContactName: e.target.value})} placeholder="Nome (ex: Zelador João)" />
+                           )}
+                        </div>
+                     </div>
+                     
+                     <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Endereço da Sala</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                           <Input label="CEP" theme={theme} value={roomFormData.cep} onChange={e => setRoomFormData({...roomFormData, cep: formatCEPMask(e.target.value)})} onBlur={handleRoomCepBlur} placeholder="00000-000" />
+                           <Input label="Logradouro" theme={theme} required className="md:col-span-2" value={roomFormData.street} onChange={e => setRoomFormData({...roomFormData, street: e.target.value})} placeholder="Rua, Avenida..." />
+                           <Input label="Número" theme={theme} value={roomFormData.number} onChange={e => setRoomFormData({...roomFormData, number: e.target.value})} />
+                           <Input label="Complemento" theme={theme} value={roomFormData.complement} onChange={e => setRoomFormData({...roomFormData, complement: e.target.value})} />
+                           <Input label="Bairro" theme={theme} value={roomFormData.neighborhood} onChange={e => setRoomFormData({...roomFormData, neighborhood: e.target.value})} />
+                           <Input label="Cidade/Estado" theme={theme} value={roomFormData.city && roomFormData.state ? `${roomFormData.city}/${roomFormData.state}` : ''} onChange={() => {}} disabled placeholder="Preenchimento pelo CEP" />
+                        </div>
+                     </div>
+
+                     <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Documentos Anexados</h3>
+                        <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+                          {roomFormData.rentContractUrl ? (
+                            <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                              <div className="flex items-center gap-3 overflow-hidden">
+                                <FileText size={18} className="text-slate-400 flex-shrink-0" />
+                                <div className="flex flex-col min-w-0">
+                                   <span className="text-[10px] font-bold text-slate-500 uppercase">Contrato de Locação</span>
+                                   <span className="text-sm font-medium truncate text-slate-700 dark:text-slate-200" title={roomFormData.rentContractName}>{roomFormData.rentContractName}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                                <button type="button" onClick={() => window.open(roomFormData.rentContractUrl, '_blank')} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Visualizar/Baixar">
+                                  <Download size={16} />
+                                </button>
+                                <button type="button" onClick={removeRentContract} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Remover">
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                              <input 
+                                type="file" 
+                                accept="application/pdf"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                onChange={handleRentContractUpload}
+                              />
+                              <div className="text-center flex flex-col items-center pointer-events-none">
+                                <Plus size={24} className="text-slate-400 mb-2" />
+                                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Clique ou arraste para anexar o Contrato de Locação</span>
+                                <span className="text-xs text-slate-500 mt-1">Apenas arquivos em PDF (Máx. 5MB)</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                     </div>
+
+                     <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                        <Button variant="ghost" theme={theme} type="button" onClick={() => setIsRoomModalOpen(false)}>Cancelar</Button>
+                        <Button variant="primary" theme={theme} type="submit">Salvar Sala</Button>
+                     </div>
+                  </form>
+              </Modal>
+
             </div>
           );
         }
