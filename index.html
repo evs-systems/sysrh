@@ -6007,7 +6007,7 @@
                      <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Documento e Vigência de Contrato</h3>
                         <div className="md:w-1/2">
-                          <Input label="Data de Vencimento do Contrato (Opcional para alertas)" placeholder="DD/MM/AAAA" theme={theme} value={roomFormData.rentExpirationDate || ''} onChange={e => setRoomFormData({...roomFormData, rentExpirationDate: formatDateInput(e.target.value)})} />
+                          <Input label="Data de Vencimento do Contrato" placeholder="DD/MM/AAAA" theme={theme} required value={roomFormData.rentExpirationDate || ''} onChange={e => setRoomFormData({...roomFormData, rentExpirationDate: formatDateInput(e.target.value)})} />
                         </div>
                         <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
                           {roomFormData.rentContractUrl ? (
