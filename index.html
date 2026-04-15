@@ -6706,25 +6706,25 @@
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input label="Nome Completo" theme={theme} required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                           <div className="flex flex-col md:flex-row gap-4">
-                            <Input label="Data de Nascimento" placeholder="DD/MM/AAAA" theme={theme} required className="flex-1" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: formatDateInput(e.target.value)})} />
+                            <Input label="Data de Nascimento" placeholder="DD/MM/AAAA" theme={theme} className="flex-1" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: formatDateInput(e.target.value)})} />
                             <div className="w-full md:w-24">
                               <Input label="Idade" theme={theme} value={calculateAge(formData.birthDate)} readOnly className="opacity-70 pointer-events-none" />
                             </div>
                           </div>
                           <Select 
-                            label="Gênero" theme={theme} required value={formData.gender} 
+                            label="Gênero" theme={theme} value={formData.gender} 
                             onChange={e => setFormData({...formData, gender: e.target.value})}
                             options={[ {value: 'Feminino', label: 'Feminino'}, {value: 'Masculino', label: 'Masculino'}, {value: 'Outro', label: 'Outro'} ]} 
                           />
                           <Select 
-                            label="Casado(a)?" theme={theme} required value={formData.isMarried} 
+                            label="Casado(a)?" theme={theme} value={formData.isMarried} 
                             onChange={e => setFormData({...formData, isMarried: e.target.value})}
                             options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
                           />
-                          <Input label="Número para Contato" placeholder="(00) 00000-0000" theme={theme} required value={formData.contact} onChange={e => setFormData({...formData, contact: formatPhoneMask(e.target.value)})} />
+                          <Input label="Número para Contato" placeholder="(00) 00000-0000" theme={theme} value={formData.contact} onChange={e => setFormData({...formData, contact: formatPhoneMask(e.target.value)})} />
                           <Input label="E-mail" type="email" placeholder="funcionario@exemplo.com" theme={theme} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                           <div className="flex gap-4 md:col-span-2">
-                            <Input label="CPF" placeholder="000.000.000-00" theme={theme} required className="flex-1" value={formData.cpf} onChange={e => setFormData({...formData, cpf: formatCPFMask(e.target.value)})} />
+                            <Input label="CPF" placeholder="000.000.000-00" theme={theme} className="flex-1" value={formData.cpf} onChange={e => setFormData({...formData, cpf: formatCPFMask(e.target.value)})} />
                             <Input label="RG" placeholder="00.000.000-X" theme={theme} className="flex-1" value={formData.rg} onChange={e => setFormData({...formData, rg: formatRGMask(e.target.value)})} />
                           </div>
                         </div>
@@ -6733,7 +6733,7 @@
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Dependentes</h3>
                         <Select 
-                          label="Possui Filhos?" theme={theme} required value={formData.hasChildren} 
+                          label="Possui Filhos?" theme={theme} value={formData.hasChildren} 
                           onChange={e => setFormData({...formData, hasChildren: e.target.value})}
                           options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
                         />
@@ -6741,8 +6741,8 @@
                           <div className="space-y-3 p-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700">
                             {formData.children.map((child, index) => (
                               <div key={index} className="flex flex-col md:flex-row gap-4 items-end relative pb-4 mb-4 border-b border-slate-200/50 dark:border-slate-700/50 last:border-0 last:mb-0 last:pb-0">
-                                <Input label={`Nome do Filho(a) ${index + 1}`} theme={theme} required className="flex-[2]" value={child.name} onChange={e => handleChildChange(index, 'name', e.target.value)} />
-                                <Input label="Nascimento" placeholder="DD/MM/AAAA" theme={theme} required className="w-full md:w-32" value={child.birthDate} onChange={e => handleChildChange(index, 'birthDate', formatDateInput(e.target.value))} />
+                                <Input label={`Nome do Filho(a) ${index + 1}`} theme={theme} className="flex-[2]" value={child.name} onChange={e => handleChildChange(index, 'name', e.target.value)} />
+                                <Input label="Nascimento" placeholder="DD/MM/AAAA" theme={theme} className="w-full md:w-32" value={child.birthDate} onChange={e => handleChildChange(index, 'birthDate', formatDateInput(e.target.value))} />
                                 <Input label="Idade" theme={theme} value={calculateAge(child.birthDate)} readOnly className="w-full md:w-24 opacity-70 pointer-events-none" />
                                 {formData.children.length > 1 && (
                                   <button type="button" onClick={() => removeChild(index)} className="p-2.5 mb-[2px] bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors">
@@ -6761,12 +6761,12 @@
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Endereço</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Input label="CEP" placeholder="00000-000" theme={theme} required value={formData.cep} onChange={e => setFormData({...formData, cep: formatCEPMask(e.target.value)})} onBlur={handleCepBlur} />
-                          <Input label="Rua / Logradouro" theme={theme} required className="md:col-span-2" value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} />
-                          <Input label="Número" theme={theme} required value={formData.number} onChange={e => setFormData({...formData, number: e.target.value})} />
+                          <Input label="CEP" placeholder="00000-000" theme={theme} value={formData.cep} onChange={e => setFormData({...formData, cep: formatCEPMask(e.target.value)})} onBlur={handleCepBlur} />
+                          <Input label="Rua / Logradouro" theme={theme} className="md:col-span-2" value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} />
+                          <Input label="Número" theme={theme} value={formData.number} onChange={e => setFormData({...formData, number: e.target.value})} />
                           <Input label="Complemento" theme={theme} value={formData.complement} onChange={e => setFormData({...formData, complement: e.target.value})} />
-                          <Input label="Bairro" theme={theme} required value={formData.neighborhood} onChange={e => setFormData({...formData, neighborhood: e.target.value})} />
-                          <Input label="Estado (UF)" theme={theme} required value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
+                          <Input label="Bairro" theme={theme} value={formData.neighborhood} onChange={e => setFormData({...formData, neighborhood: e.target.value})} />
+                          <Input label="Estado (UF)" theme={theme} value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
                         </div>
                       </div>
 
@@ -6774,38 +6774,38 @@
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Vínculo Empregatício e Salário</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Select 
-                            label="Empresa de Registro" theme={theme} required value={formData.company} 
+                            label="Empresa de Registro" theme={theme} value={formData.company} 
                             onChange={e => {
                               const comp = companies.find(c => c.name === e.target.value);
                               setFormData({...formData, company: e.target.value, cnpj: comp ? comp.cnpj : ''});
                             }}
                             options={companies.map(c => ({value: c.name, label: c.name}))} 
                           />
-                          <Input label="CNPJ da Empresa" placeholder="00.000.000/0000-00" theme={theme} required value={formData.cnpj} readOnly className="opacity-70 pointer-events-none bg-slate-100 dark:bg-slate-800" />
+                          <Input label="CNPJ da Empresa" placeholder="00.000.000/0000-00" theme={theme} value={formData.cnpj} readOnly className="opacity-70 pointer-events-none bg-slate-100 dark:bg-slate-800" />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                           <Select 
-                            label="Unidade de Trabalho" theme={theme} required value={formData.unit} 
+                            label="Unidade de Trabalho" theme={theme} value={formData.unit} 
                             onChange={e => setFormData({...formData, unit: e.target.value})}
                             options={[ {value: 'EverSky', label: 'EverSky'}, {value: 'Everest', label: 'Everest'}, {value: 'Bonway', label: 'Bonway'}, {value: 'Perus', label: 'Perus'}, {value: 'Barueri', label: 'Barueri'}, {value: 'Good', label: 'Good'} ]} 
                           />
                           <Select 
-                            label="Setor de Atuação" theme={theme} required value={formData.workSector} 
+                            label="Setor de Atuação" theme={theme} value={formData.workSector} 
                             onChange={e => setFormData({...formData, workSector: e.target.value})}
                             options={[ {value: 'Estoque', label: 'Estoque'}, {value: 'Administrativo', label: 'Administrativo'} ]} 
                           />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                          <Input label="Cargo" theme={theme} required value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} />
-                          <Input label="Departamento" theme={theme} required value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} />
-                          <Input label="Salário Base (R$)" type="text" theme={theme} required value={displayCurrencyMask(formData.baseSalary)} onChange={e => setFormData({...formData, baseSalary: formatCurrencyInput(e.target.value)})} />
+                          <Input label="Cargo" theme={theme} value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} />
+                          <Input label="Departamento" theme={theme} value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} />
+                          <Input label="Salário Base (R$)" type="text" theme={theme} value={displayCurrencyMask(formData.baseSalary)} onChange={e => setFormData({...formData, baseSalary: formatCurrencyInput(e.target.value)})} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-                          <Select label="Horário de Entrada (Turno)" theme={theme} required value={formData.workShiftStart} onChange={e => setFormData({...formData, workShiftStart: e.target.value})} options={SHIFT_TIME_OPTIONS} />
-                          <Select label="Horário de Saída (Turno)" theme={theme} required value={formData.workShiftEnd} onChange={e => setFormData({...formData, workShiftEnd: e.target.value})} options={SHIFT_TIME_OPTIONS} />
+                          <Select label="Horário de Entrada (Turno)" theme={theme} value={formData.workShiftStart} onChange={e => setFormData({...formData, workShiftStart: e.target.value})} options={SHIFT_TIME_OPTIONS} />
+                          <Select label="Horário de Saída (Turno)" theme={theme} value={formData.workShiftEnd} onChange={e => setFormData({...formData, workShiftEnd: e.target.value})} options={SHIFT_TIME_OPTIONS} />
                           
                           <Select 
-                            label="Escala de Sábado" theme={theme} required value={formData.saturdayShift || 'Não trabalha'} 
+                            label="Escala de Sábado" theme={theme} value={formData.saturdayShift || 'Não trabalha'} 
                             onChange={e => setFormData({...formData, saturdayShift: e.target.value})}
                             options={[ {value: 'Não trabalha', label: 'Não trabalha'}, {value: 'Todos os sábados', label: 'Todos os sábados'}, {value: 'Sábados alternados', label: 'Sábados alternados'} ]} 
                           />
@@ -6813,7 +6813,7 @@
                           {formData.saturdayShift === 'Sábados alternados' && (
                             <div className="animate-in fade-in zoom-in-95 duration-300">
                               <Select 
-                                label="Equipe de Escala" theme={theme} required value={formData.saturdayShiftTeam || ''} 
+                                label="Equipe de Escala" theme={theme} value={formData.saturdayShiftTeam || ''} 
                                 onChange={e => setFormData({...formData, saturdayShiftTeam: e.target.value})}
                                 options={[ {value: 'Escala 1 (Jeniffer)', label: 'Escala 1 (Jeniffer)'}, {value: 'Escala 2 (Thalia)', label: 'Escala 2 (Thalia)'} ]} 
                               />
@@ -6824,14 +6824,14 @@
                         {/* Seção de Contrato */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
                           <Select 
-                            label="É Contrato?" theme={theme} required value={formData.isContract} 
+                            label="É Contrato?" theme={theme} value={formData.isContract} 
                             onChange={e => setFormData({...formData, isContract: e.target.value})}
                             options={[ {value: 'Não', label: 'Não'}, {value: 'Sim', label: 'Sim'}, {value: 'Efetivado', label: 'Efetivado'} ]} 
                           />
                           {(formData.isContract === 'Sim' || formData.isContract === 'Efetivado') && (
                             <>
                               <Input 
-                                label="Início do Contrato" placeholder="DD/MM/AAAA" theme={theme} required 
+                                label="Início do Contrato" placeholder="DD/MM/AAAA" theme={theme} 
                                 value={formData.contractStartDate} 
                                 onChange={e => setFormData({...formData, contractStartDate: formatDateInput(e.target.value)})} 
                                 readOnly={formData.isContract === 'Efetivado'}
@@ -6839,7 +6839,7 @@
                                 title={formData.isContract === 'Efetivado' ? 'Histórico bloqueado' : ''}
                               />
                               <Input 
-                                label="Fim do Contrato" placeholder="DD/MM/AAAA" theme={theme} required 
+                                label="Fim do Contrato" placeholder="DD/MM/AAAA" theme={theme} 
                                 value={formData.contractEndDate} 
                                 onChange={e => setFormData({...formData, contractEndDate: formatDateInput(e.target.value)})} 
                                 readOnly={formData.isContract === 'Efetivado'}
@@ -6853,14 +6853,14 @@
                         {/* Seção de Estágio */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
                           <Select 
-                            label="É Estágio?" theme={theme} required value={formData.isInternship || 'Não'} 
+                            label="É Estágio?" theme={theme} value={formData.isInternship || 'Não'} 
                             onChange={e => setFormData({...formData, isInternship: e.target.value})}
                             options={[ {value: 'Não', label: 'Não'}, {value: 'Sim', label: 'Sim'}, {value: 'Efetivado', label: 'Efetivado'} ]} 
                           />
                           {(formData.isInternship === 'Sim' || formData.isInternship === 'Efetivado') && (
                             <>
                               <Input 
-                                label="Início do Estágio" placeholder="DD/MM/AAAA" theme={theme} required 
+                                label="Início do Estágio" placeholder="DD/MM/AAAA" theme={theme} 
                                 value={formData.internshipStartDate || ''} 
                                 onChange={e => setFormData({...formData, internshipStartDate: formatDateInput(e.target.value)})} 
                                 readOnly={formData.isInternship === 'Efetivado'}
@@ -6868,7 +6868,7 @@
                                 title={formData.isInternship === 'Efetivado' ? 'Histórico bloqueado' : ''}
                               />
                               <Input 
-                                label="Fim do Estágio" placeholder="DD/MM/AAAA" theme={theme} required 
+                                label="Fim do Estágio" placeholder="DD/MM/AAAA" theme={theme} 
                                 value={formData.internshipEndDate || ''} 
                                 onChange={e => setFormData({...formData, internshipEndDate: formatDateInput(e.target.value)})} 
                                 readOnly={formData.isInternship === 'Efetivado'}
@@ -6887,7 +6887,6 @@
                             label="Data de Início/Admissão" 
                             placeholder="DD/MM/AAAA" 
                             theme={theme} 
-                            required={formData.isContract !== 'Sim' && formData.isInternship !== 'Sim'} 
                             value={formData.startDate || ''} 
                             onChange={e => {
                               let val = formatDateInput(e.target.value);
@@ -6939,7 +6938,7 @@
                             {formData.fuelAllowance === 'Sim' && (
                               <div className="animate-in fade-in slide-in-from-top-2">
                                 <Input 
-                                  label="Valor Diário do Combustível (R$)" type="text" theme={theme} required 
+                                  label="Valor Diário do Combustível (R$)" type="text" theme={theme} 
                                   value={displayCurrencyMask(formData.fuelAllowanceValue)} 
                                   onChange={e => setFormData({...formData, fuelAllowanceValue: formatCurrencyInput(e.target.value)})} 
                                 />
@@ -6954,7 +6953,7 @@
                           
                           {formData.healthInsurance === 'Sim' && (
                             <>
-                              <Input label="Valor do Convênio (R$)" type="text" theme={theme} required value={displayCurrencyMask(formData.healthInsuranceValue)} onChange={e => setFormData({...formData, healthInsuranceValue: formatCurrencyInput(e.target.value)})} />
+                              <Input label="Valor do Convênio (R$)" type="text" theme={theme} value={displayCurrencyMask(formData.healthInsuranceValue)} onChange={e => setFormData({...formData, healthInsuranceValue: formatCurrencyInput(e.target.value)})} />
                               <Select 
                                 label="Possui Dependentes no Convênio?" theme={theme} value={formData.hasDependents} 
                                 onChange={e => setFormData({...formData, hasDependents: e.target.value})} 
@@ -6963,8 +6962,8 @@
                               
                               {formData.hasDependents === 'Sim' && (
                                 <>
-                                  <Input label="Quantidade de Dependentes" type="number" theme={theme} required value={formData.dependentsCount} onChange={e => setFormData({...formData, dependentsCount: e.target.value})} />
-                                  <Input label="Valor dos Dependentes (R$)" type="text" theme={theme} required value={displayCurrencyMask(formData.dependentsValue)} onChange={e => setFormData({...formData, dependentsValue: formatCurrencyInput(e.target.value)})} />
+                                  <Input label="Quantidade de Dependentes" type="number" theme={theme} value={formData.dependentsCount} onChange={e => setFormData({...formData, dependentsCount: e.target.value})} />
+                                  <Input label="Valor dos Dependentes (R$)" type="text" theme={theme} value={displayCurrencyMask(formData.dependentsValue)} onChange={e => setFormData({...formData, dependentsValue: formatCurrencyInput(e.target.value)})} />
                                 </>
                               )}
                             </>
@@ -6973,7 +6972,7 @@
 
                         <div className="mt-4">
                           <Select 
-                            label="Recebe Vale Alimentação?" theme={theme} required value={formData.foodVoucher || 'Não'} 
+                            label="Recebe Vale Alimentação?" theme={theme} value={formData.foodVoucher || 'Não'} 
                             onChange={e => setFormData({...formData, foodVoucher: e.target.value})}
                             options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
                           />
@@ -6982,7 +6981,7 @@
                         {formData.foodVoucher === 'Sim' && (
                           <div className="mt-2 animate-in fade-in slide-in-from-top-2">
                             <Input 
-                              label="Valor Diário do Vale Alimentação (R$)" type="text" theme={theme} required 
+                              label="Valor Diário do Vale Alimentação (R$)" type="text" theme={theme} 
                               value={displayCurrencyMask(formData.foodVoucherValue)} 
                               onChange={e => setFormData({...formData, foodVoucherValue: formatCurrencyInput(e.target.value)})} 
                             />
@@ -6991,7 +6990,7 @@
 
                         <div className="mt-4">
                           <Select 
-                            label="Recebe Vale Transporte?" theme={theme} required value={formData.transportVoucher || 'Não'} 
+                            label="Recebe Vale Transporte?" theme={theme} value={formData.transportVoucher || 'Não'} 
                             onChange={e => setFormData({...formData, transportVoucher: e.target.value})}
                             options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
                           />
@@ -7005,7 +7004,7 @@
                                 <Input 
                                   label={`Nome do Cartão ${index + 1}`} 
                                   theme={theme} 
-                                  required 
+                                  
                                   placeholder="Ex: Bilhete Único, BOM..."
                                   className="flex-[2]"
                                   value={card.name || ''} 
@@ -7015,7 +7014,7 @@
                                   label="Valor Diário (R$)" 
                                   type="text" 
                                   theme={theme} 
-                                  required 
+                                  
                                   className="flex-[1]"
                                   value={displayCurrencyMask(card.valuePerDay)} 
                                   onChange={e => handleTransportCardChange(index, 'valuePerDay', formatCurrencyInput(e.target.value))} 
@@ -7047,7 +7046,7 @@
                       <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Empréstimos</h3>
                         <Select 
-                          label="Possui Empréstimos Ativos?" theme={theme} required value={formData.hasLoans || 'Não'} 
+                          label="Possui Empréstimos Ativos?" theme={theme} value={formData.hasLoans || 'Não'} 
                           onChange={e => setFormData({...formData, hasLoans: e.target.value})}
                           options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
                         />
@@ -7065,12 +7064,12 @@
                                   )}
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <Input label="Mês do Empréstimo (MM/AAAA)" placeholder="MM/AAAA" theme={theme} required value={loan.loanMonth} onChange={e => handleLoanChange(index, 'loanMonth', e.target.value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, "$1/$2").slice(0, 7))} />
-                                  <Input label="Prazo Final (MM/AAAA)" placeholder="MM/AAAA" theme={theme} required value={loan.deadlineMonth} onChange={e => handleLoanChange(index, 'deadlineMonth', e.target.value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, "$1/$2").slice(0, 7))} />
-                                  <Input label="Valor Total (R$)" type="text" theme={theme} required value={displayCurrencyMask(loan.totalAmount)} onChange={e => handleLoanChange(index, 'totalAmount', formatCurrencyInput(e.target.value))} />
+                                  <Input label="Mês do Empréstimo (MM/AAAA)" placeholder="MM/AAAA" theme={theme} value={loan.loanMonth} onChange={e => handleLoanChange(index, 'loanMonth', e.target.value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, "$1/$2").slice(0, 7))} />
+                                  <Input label="Prazo Final (MM/AAAA)" placeholder="MM/AAAA" theme={theme} value={loan.deadlineMonth} onChange={e => handleLoanChange(index, 'deadlineMonth', e.target.value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, "$1/$2").slice(0, 7))} />
+                                  <Input label="Valor Total (R$)" type="text" theme={theme} value={displayCurrencyMask(loan.totalAmount)} onChange={e => handleLoanChange(index, 'totalAmount', formatCurrencyInput(e.target.value))} />
                                   <div className="grid grid-cols-2 gap-4">
-                                    <Input label="Qtd. Parcelas" type="number" theme={theme} required value={loan.installmentsCount} onChange={e => handleLoanChange(index, 'installmentsCount', e.target.value.replace(/\D/g, ''))} />
-                                    <Input label="Valor Parcela (R$)" type="text" theme={theme} required value={displayCurrencyMask(loan.installmentValue)} onChange={e => handleLoanChange(index, 'installmentValue', formatCurrencyInput(e.target.value))} />
+                                    <Input label="Qtd. Parcelas" type="number" theme={theme} value={loan.installmentsCount} onChange={e => handleLoanChange(index, 'installmentsCount', e.target.value.replace(/\D/g, ''))} />
+                                    <Input label="Valor Parcela (R$)" type="text" theme={theme} value={displayCurrencyMask(loan.installmentValue)} onChange={e => handleLoanChange(index, 'installmentValue', formatCurrencyInput(e.target.value))} />
                                   </div>
                                 </div>
                               </div>
@@ -7087,12 +7086,12 @@
                       <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Dados do Freelancer</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input label="Nome Completo" theme={theme} required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                        <Input label="CPF" placeholder="000.000.000-00" theme={theme} required value={formData.cpf} onChange={e => setFormData({...formData, cpf: formatCPFMask(e.target.value)})} />
-                        <Input label="Número para Contato" placeholder="(00) 00000-0000" theme={theme} required value={formData.contact} onChange={e => setFormData({...formData, contact: formatPhoneMask(e.target.value)})} />
+                        <Input label="CPF" placeholder="000.000.000-00" theme={theme} value={formData.cpf} onChange={e => setFormData({...formData, cpf: formatCPFMask(e.target.value)})} />
+                        <Input label="Número para Contato" placeholder="(00) 00000-0000" theme={theme} value={formData.contact} onChange={e => setFormData({...formData, contact: formatPhoneMask(e.target.value)})} />
                         <Input label="Data de Início" placeholder="DD/MM/AAAA" theme={theme} value={formData.freelanceStartDate} onChange={e => setFormData({...formData, freelanceStartDate: formatDateInput(e.target.value)})} />
                         <Input label="Indicado por" theme={theme} value={formData.referredBy} onChange={e => setFormData({...formData, referredBy: e.target.value})} />
                         <Select 
-                          label="Chamar esse freelancer?" theme={theme} required value={formData.callFreelancer || 'Sim'} 
+                          label="Chamar esse freelancer?" theme={theme} value={formData.callFreelancer || 'Sim'} 
                           onChange={e => setFormData({...formData, callFreelancer: e.target.value})}
                           options={[ {value: 'Sim', label: 'Sim'}, {value: 'Não', label: 'Não'} ]} 
                         />
@@ -7137,7 +7136,7 @@
                         />
                         {formData.pixDifferentBank === 'Sim' && (
                           <div className="animate-in fade-in slide-in-from-top-2">
-                            <Input label="Nome do Banco (Pix)" theme={theme} required value={formData.pixBankName || ''} onChange={e => setFormData({...formData, pixBankName: e.target.value})} />
+                            <Input label="Nome do Banco (Pix)" theme={theme} value={formData.pixBankName || ''} onChange={e => setFormData({...formData, pixBankName: e.target.value})} />
                           </div>
                         )}
                       </div>
@@ -7191,14 +7190,14 @@
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Status na Empresa</h3>
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
                           <Select 
-                            label="Situação Atual" theme={theme} required value={formData.status} 
+                            label="Situação Atual" theme={theme} value={formData.status} 
                             onChange={e => setFormData({...formData, status: e.target.value})}
                             options={[ {value: 'Ativo', label: 'Ativo / Trabalhando'}, {value: 'Desligado', label: formData.employeeType === 'Freelancer' ? 'Desligado / Inativo' : 'Desligado (Ex-funcionário)'} ]} 
                           />
                           {formData.status === 'Desligado' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-2">
-                              <Input label="Data de Desligamento" placeholder="DD/MM/AAAA" theme={theme} required value={formData.terminationDate} onChange={e => setFormData({...formData, terminationDate: formatDateInput(e.target.value)})} />
-                              <Input label="Motivo do Desligamento" theme={theme} required value={formData.terminationReason} onChange={e => setFormData({...formData, terminationReason: e.target.value})} />
+                              <Input label="Data de Desligamento" placeholder="DD/MM/AAAA" theme={theme} value={formData.terminationDate} onChange={e => setFormData({...formData, terminationDate: formatDateInput(e.target.value)})} />
+                              <Input label="Motivo do Desligamento" theme={theme} value={formData.terminationReason} onChange={e => setFormData({...formData, terminationReason: e.target.value})} />
                             </div>
                           )}
                         </div>
