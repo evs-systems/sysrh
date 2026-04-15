@@ -521,7 +521,7 @@
           const [commercialRooms, setCommercialRooms] = useState([]);
           const [employees, setEmployees] = useState([]);
           const [payments, setPayments] = useState([]);
-          const [disciplinary, setDisciplinary] = useState([]);
+          const [requests, setRequests] = useState([]);
           const [occurrences, setOccurrences] = useState([]);
           const [events, setEvents] = useState([]);
           const [systemUsers, setSystemUsers] = useState([]);
@@ -609,8 +609,8 @@
               (snapshot) => { setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubDisciplinary = onSnapshot(collection(db, `${basePath}/disciplinary`), 
-              (snapshot) => { setDisciplinary(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
+            const unsubRequests = onSnapshot(collection(db, `${basePath}/requests`), 
+              (snapshot) => { setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
             const unsubOccurrences = onSnapshot(collection(db, `${basePath}/occurrences`), 
@@ -632,7 +632,7 @@
               unsubCommercialRooms();
               unsubEmployees();
               unsubPayments();
-              unsubDisciplinary();
+              unsubRequests();
               unsubOccurrences();
               unsubEvents();
               unsubLogs();
@@ -822,7 +822,7 @@
             { id: 'companies', icon: Building, label: 'Empresas', req: 'companies' },
             { id: 'employees', icon: Users, label: 'Colaboradores', req: 'employees' },
             { id: 'payments', icon: DollarSign, label: 'Pagamentos', req: 'payments' },
-            { id: 'disciplinary', icon: FileText, label: 'Solicitações', req: 'disciplinary' },
+            { id: 'requests', icon: FileText, label: 'Solicitações', req: 'requests' },
             { id: 'occurrences', icon: AlertTriangle, label: 'Ocorrências', req: 'occurrences' },
             { id: 'systemUsers', icon: Shield, label: 'Usuários', req: 'systemUsers' },
             { id: 'logs', icon: History, label: 'Histórico de Logs', req: 'logs' }
@@ -1013,7 +1013,7 @@
 
                 <div className="flex-1 h-full overflow-y-auto pr-4 md:pr-6 custom-scrollbar min-w-0">
                   <div className="w-full max-w-[1600px] mx-auto space-y-6 pb-20">
-                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} disciplinary={disciplinary} occurrences={occurrences} companies={companies} events={events} commercialRooms={commercialRooms} />}
+                    {activeTab === 'dashboard' && <DashboardView theme={theme} appUser={appUser} employees={employees} payments={payments} requests={requests} occurrences={occurrences} companies={companies} events={events} commercialRooms={commercialRooms} />}
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
@@ -1021,7 +1021,7 @@
                     {activeTab === 'companies' && <CompaniesView theme={theme} basePath={basePath} appUser={appUser} companies={companies} commercialRooms={commercialRooms} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'employees' && <EmployeesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'payments' && <PaymentsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} payments={payments} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
-                    {activeTab === 'disciplinary' && <DisciplinaryView theme={theme} basePath={basePath} appUser={appUser} employees={employees} disciplinary={disciplinary} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
+                    {activeTab === 'requests' && <RequestsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} requests={requests} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'occurrences' && canAccess('occurrences') && <OccurrencesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} occurrences={occurrences} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'systemUsers' && canAccess('systemUsers') && <SystemUsersView theme={theme} basePath={basePath} systemUsers={systemUsers} showToast={showToast} logAction={logInteraction} firebaseConfig={firebaseConfig} requestConfirm={requestConfirm} appUser={appUser} />}
                     {activeTab === 'logs' && canAccess('logs') && <LogsView theme={theme} basePath={basePath} logs={logs} />}
@@ -1464,7 +1464,7 @@
           );
         }
 
-        function DashboardView({ theme, appUser, employees, payments, disciplinary, occurrences, companies, events, commercialRooms }) {
+        function DashboardView({ theme, appUser, employees, payments, requests, occurrences, companies, events, commercialRooms }) {
           // Função inteligente para checar a matriz de permissões do usuário logado
           const checkAccess = (mod) => {
              if (appUser?.sector === 'Administração') return true;
@@ -1473,7 +1473,7 @@
           
           const showEmp = checkAccess('employees');
           const showPay = checkAccess('payments');
-          const showDisc = checkAccess('disciplinary');
+          const showDisc = checkAccess('requests');
           const showOcc = checkAccess('occurrences');
           const showVac = checkAccess('vacations');
           const showComp = checkAccess('companies'); // Permissão para ver certificados
@@ -1501,7 +1501,7 @@
           const stats = [];
           if (showEmp) stats.push({ title: 'Total de Funcionários Ativos', value: activeEmployees.length, icon: Users, color: 'text-blue-500' });
           if (showPay) stats.push({ title: 'Total Pago (Mês)', value: formatCurrency(payments.reduce((acc, curr) => acc + Number(curr.amount), 0)), icon: DollarSign, color: 'text-emerald-500' });
-          if (showDisc) stats.push({ title: 'Solicitações Ativas', value: disciplinary.filter(d => d.status !== 'Finalizado').length, icon: FileText, color: 'text-amber-500' });
+          if (showDisc) stats.push({ title: 'Solicitações Ativas', value: requests.filter(d => d.status !== 'Finalizado').length, icon: FileText, color: 'text-amber-500' });
           if (showOcc) stats.push({ title: 'Ocorrências no Mês', value: monthOccurrences, icon: AlertTriangle, color: 'text-rose-500' });
 
           const estoqueCount = activeEmployees.filter(e => e.workSector === 'Estoque').length;
@@ -1910,7 +1910,7 @@
                       <FileText size={20} className={theme.text} /> Últimas Solicitações
                     </h3>
                     <div className="space-y-4">
-                      {disciplinary.slice(0, 5).map(disc => {
+                      {requests.slice(0, 5).map(disc => {
                         const emp = employees.find(e => e.id === disc.employeeId);
                         const isHighlight = disc.type === 'Desligamento' || disc.type === 'Adiantamento';
                         return (
@@ -1925,7 +1925,7 @@
                           </div>
                         );
                       })}
-                      {disciplinary.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhuma solicitação registrada.</p>}
+                      {requests.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhuma solicitação registrada.</p>}
                     </div>
                   </Card>
                 )}
@@ -8707,14 +8707,14 @@
           );
         }
 
-        function DisciplinaryView({ theme, basePath, appUser, employees, disciplinary, showToast, logAction, requestConfirm }) {
+        function RequestsView({ theme, basePath, appUser, employees, requests, showToast, logAction, requestConfirm }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [editingId, setEditingId] = useState(null);
           const [activeSubTab, setActiveSubTab] = useState('ativas');
           const [formData, setFormData] = useState({ employeeId: '', type: 'Adiantamento', status: 'A fazer', date: '', description: '' });
 
-          const canWrite = appUser?.permissions?.disciplinary?.write;
-          const canDelete = appUser?.permissions?.disciplinary?.delete;
+          const canWrite = appUser?.permissions?.requests?.write;
+          const canDelete = appUser?.permissions?.requests?.delete;
 
           const STATUS_COLORS = {
             'A fazer': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
@@ -8756,11 +8756,11 @@
             const emp = employees.find(e => e.id === formData.employeeId);
             try {
               if (editingId) {
-                await updateDoc(doc(db, `${basePath}/disciplinary/${editingId}`), formData);
+                await updateDoc(doc(db, `${basePath}/requests/${editingId}`), formData);
                 logAction('Atualização', 'Solicitações', `Atualizou a solicitação de ${formData.type} para ${emp?.name || 'Desconhecido'}`);
                 showToast('Solicitação atualizada!');
               } else {
-                await addDoc(collection(db, `${basePath}/disciplinary`), formData);
+                await addDoc(collection(db, `${basePath}/requests`), formData);
                 logAction('Cadastro', 'Solicitações', `Registrou solicitação de ${formData.type} para ${emp?.name || 'Desconhecido'}`);
                 showToast('Solicitação registrada!');
               }
@@ -8774,7 +8774,7 @@
             if (!canDelete) return;
             requestConfirm(`Tem certeza que deseja excluir esta solicitação (${type})?`, async () => {
               try {
-                await deleteDoc(doc(db, `${basePath}/disciplinary/${id}`));
+                await deleteDoc(doc(db, `${basePath}/requests/${id}`));
                 logAction('Exclusão', 'Solicitações', `Removeu a solicitação: ${type}`);
                 showToast('Solicitação removida.');
               } catch (err) {
@@ -8783,8 +8783,8 @@
             });
           };
 
-          const activeRequests = disciplinary.filter(d => d.status !== 'Finalizado');
-          const finishedRequests = disciplinary.filter(d => d.status === 'Finalizado');
+          const activeRequests = requests.filter(d => d.status !== 'Finalizado');
+          const finishedRequests = requests.filter(d => d.status === 'Finalizado');
           const currentList = activeSubTab === 'ativas' ? activeRequests : finishedRequests;
 
           return (
@@ -9338,7 +9338,7 @@
             { id: 'companies', label: 'Empresas' },
             { id: 'employees', label: 'Colaboradores' },
             { id: 'payments', label: 'Pagamentos' },
-            { id: 'disciplinary', label: 'Solicitações' },
+            { id: 'requests', label: 'Solicitações' },
             { id: 'occurrences', label: 'Ocorrências' },
             { id: 'systemUsers', label: 'Usuários' },
             { id: 'logs', label: 'Histórico de Logs' }
@@ -9353,7 +9353,7 @@
               companies: { read: true, write: true, delete: true },
               employees: { read: true, write: true, delete: true }, 
               payments: { read: true, write: true, delete: true }, 
-              disciplinary: { read: true, write: true, delete: true },
+              requests: { read: true, write: true, delete: true },
               occurrences: { read: true, write: true, delete: true },
               systemUsers: { read: true, write: true, delete: true },
               logs: { read: true, write: false, delete: false }
@@ -9366,7 +9366,7 @@
               companies: { read: true, write: false, delete: false },
               employees: { read: true, write: true, delete: false }, 
               payments: { read: true, write: false, delete: false }, 
-              disciplinary: { read: true, write: true, delete: false },
+              requests: { read: true, write: true, delete: false },
               occurrences: { read: true, write: true, delete: false },
               systemUsers: { read: false, write: false, delete: false },
               logs: { read: false, write: false, delete: false }
@@ -9379,7 +9379,7 @@
               companies: { read: true, write: false, delete: false },
               employees: { read: true, write: false, delete: false }, 
               payments: { read: true, write: true, delete: false }, 
-              disciplinary: { read: true, write: false, delete: false },
+              requests: { read: true, write: false, delete: false },
               occurrences: { read: false, write: false, delete: false },
               systemUsers: { read: false, write: false, delete: false },
               logs: { read: false, write: false, delete: false }
