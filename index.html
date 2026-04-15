@@ -391,20 +391,26 @@
           </div>
         );
 
-        const Select = ({ label, theme, options, value, onChange, required, className = "", ...props }) => {
+        const Select = ({ label, theme, options, value, onChange, required, className = "", search, ...props }) => {
           const [isOpen, setIsOpen] = useState(false);
+          const [searchTerm, setSearchTerm] = useState('');
           const selectRef = useRef(null);
           const selectedOption = options.find(opt => opt.value === value);
+
+          const filteredOptions = search 
+            ? options.filter(opt => (opt.label || '').toLowerCase().includes(searchTerm.toLowerCase()))
+            : options;
 
           useEffect(() => {
             const handleClickOutside = (event) => {
               if (selectRef.current && !selectRef.current.contains(event.target)) {
                 setIsOpen(false);
+                if (search) setSearchTerm('');
               }
             };
             if (isOpen) document.addEventListener('mousedown', handleClickOutside);
             return () => document.removeEventListener('mousedown', handleClickOutside);
-          }, [isOpen]);
+          }, [isOpen, search]);
 
           return (
             <div ref={selectRef} className={`flex flex-col gap-1 relative ${className}`}>
@@ -439,14 +445,30 @@
 
               {isOpen && (
                 <div className="absolute top-[100%] left-0 right-0 mt-2 z-50 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  {search && (
+                    <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input 
+                          type="text" 
+                          autoFocus
+                          placeholder="Buscar..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-700 dark:text-slate-200"
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div className="max-h-56 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                    {options.map(opt => (
+                    {filteredOptions.map(opt => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => {
                           onChange({ target: { value: opt.value } });
                           setIsOpen(false);
+                          if(search) setSearchTerm('');
                         }}
                         className={`w-full text-left px-4 py-2.5 rounded-xl transition-all duration-200 ${
                           value === opt.value 
@@ -457,7 +479,7 @@
                         {opt.label}
                       </button>
                     ))}
-                    {options.length === 0 && <div className="px-4 py-2.5 text-sm text-slate-500 text-center">Nenhuma opção disponível</div>}
+                    {filteredOptions.length === 0 && <div className="px-4 py-2.5 text-sm text-slate-500 text-center">Nenhuma opção disponível ou encontrada</div>}
                   </div>
                 </div>
               )}
@@ -8273,9 +8295,9 @@
                     
                     {formData.category === 'employee' ? (
                       <Select 
-                        label="Selecione o Funcionário" theme={theme} required value={formData.employeeId} 
+                        label="Selecione o Funcionário" theme={theme} required search value={formData.employeeId} 
                         onChange={e => setFormData({...formData, employeeId: e.target.value})}
-                        options={employees.map(e => ({ value: e.id, label: e.name }))} 
+                        options={[...employees].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(e => ({ value: e.id, label: e.name }))} 
                         className="md:col-span-2"
                       />
                     ) : (
@@ -8505,9 +8527,9 @@
                     
                     {editFormData.category === 'employee' ? (
                       <Select 
-                        label="Funcionário" theme={theme} required value={editFormData.employeeId} 
+                        label="Funcionário" theme={theme} required search value={editFormData.employeeId} 
                         onChange={e => setEditFormData({...editFormData, employeeId: e.target.value})}
-                        options={employees.map(e => ({ value: e.id, label: e.name }))} 
+                        options={[...employees].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(e => ({ value: e.id, label: e.name }))} 
                         className="md:col-span-2"
                       />
                     ) : (
@@ -8862,9 +8884,9 @@
               <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Editar Solicitação' : 'Registrar Solicitação'}>
                 <form onSubmit={handleSave} className="space-y-4">
                   <Select 
-                    label="Funcionário" theme={theme} required value={formData.employeeId} 
+                    label="Funcionário" theme={theme} required search value={formData.employeeId} 
                     onChange={e => setFormData({...formData, employeeId: e.target.value})}
-                    options={employees.map(e => ({ value: e.id, label: e.name }))} 
+                    options={[...employees].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(e => ({ value: e.id, label: e.name }))} 
                   />
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Select 
@@ -9278,7 +9300,7 @@
                       label="Colaborador" className="z-50" theme={theme} required search 
                       value={formData.employeeId} 
                       onChange={handleEmployeeChange}
-                      options={activeEmployees.map(e => ({ value: e.id, label: e.name }))} 
+                      options={[...activeEmployees].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(e => ({ value: e.id, label: e.name }))}
                     />
                   </div>
 
