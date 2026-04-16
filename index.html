@@ -586,14 +586,8 @@
                } else if (fileType.includes('image')) {
                   setImageViewer({ isOpen: true, url: blobUrl, name: originalFileName });
                } else {
-                  // Força Download de Certificados, Excel ou não reconhecidos
-                  const a = document.createElement('a');
-                  a.href = blobUrl;
-                  a.download = originalFileName;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000); // Libera da mémoria local
+                  // Delega a ação para o navegador (Gera pop-up de Abrir/Salvar sem forçar renomear sem extensão)
+                  window.open(blobUrl, '_blank');
                }
             } catch (err) {
                console.error("Erro no acesso seguro:", err);
