@@ -1115,7 +1115,7 @@
               {/* Modais Globais de Aviso */}
               {toast && (
                 <div className="fixed bottom-6 right-6 z-[110] animate-in slide-in-from-bottom-5">
-                  <div className={`px-6 py-3 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-white font-medium ${toast.type === 'success' || toast.type === 'info' ? 'bg-emerald-500/90' : 'bg-red-500/90'}`}>
+                  <div className={`px-6 py-3 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-white font-medium ${toast.type === 'success' ? 'bg-emerald-500/90' : toast.type === 'info' ? 'bg-blue-500/90' : 'bg-red-500/90'}`}>
                     {toast.type === 'success' ? <CheckCircle size={20} /> : toast.type === 'info' ? <Download size={20} /> : <AlertTriangle size={20} />}
                     {toast.message}
                   </div>
