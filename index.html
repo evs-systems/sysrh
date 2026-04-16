@@ -1104,7 +1104,14 @@
           const messagesEndRef = useRef(null);
 
           // Obtém os setores únicos para criar os grupos dinamicamente
-          const sectors = Array.from(new Set(systemUsers.map(u => u.sector).filter(Boolean)));
+          let sectors = Array.from(new Set(systemUsers.map(u => u.sector).filter(Boolean)));
+          
+          if (appUser?.sector !== 'Administração') {
+            sectors = sectors.filter(s => s === appUser?.sector);
+          }
+          
+          // Adiciona o grupo 'Geral' ao topo
+          sectors.unshift('Geral');
           
           // Verifica se há pelo menos um chat não lido
           const hasUnreadTotal = Object.values(unreadChats).some(Boolean);
@@ -1132,10 +1139,20 @@
                 });
             };
 
-            // Monitora o grupo do setor do usuário
+            // Monitora o grupo Geral (Todos têm acesso)
+            const generalChatId = `group_Geral`;
+            unsubs.push(onSnapshot(collection(db, `chats/${generalChatId}/messages`), (snap) => checkUnread(generalChatId, snap)));
+
+            // Monitora os grupos departamentais permitidos
             if (appUser.sector) {
-              const groupChatId = `group_${appUser.sector.replace(/\s+/g, '_')}`;
-              unsubs.push(onSnapshot(collection(db, `chats/${groupChatId}/messages`), (snap) => checkUnread(groupChatId, snap)));
+              const accessibleSectors = appUser.sector === 'Administração' 
+                  ? Array.from(new Set(systemUsers.map(u => u.sector).filter(Boolean)))
+                  : [appUser.sector];
+
+              accessibleSectors.forEach(sec => {
+                 const groupChatId = `group_${sec.replace(/\s+/g, '_')}`;
+                 unsubs.push(onSnapshot(collection(db, `chats/${groupChatId}/messages`), (snap) => checkUnread(groupChatId, snap)));
+              });
             }
 
             // Monitora as mensagens diretas com outros usuários
