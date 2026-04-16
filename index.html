@@ -503,12 +503,12 @@
           );
         };
 
-        const Modal = ({ isOpen, onClose, title, children }) => {
+        const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl' }) => {
           if (!isOpen) return null;
           return (
             <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto custom-scrollbar">
               <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose}></div>
-              <div className="relative bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 my-auto">
+              <div className={`relative bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border border-white/20 dark:border-slate-700 rounded-3xl shadow-2xl w-full ${maxWidth} flex flex-col animate-in fade-in zoom-in-95 duration-200 my-auto`}>
                 <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
                   <h2 className="text-xl font-bold text-slate-800 dark:text-white">{title}</h2>
                   <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-slate-500">
@@ -552,6 +552,9 @@
           // Notification State
           const [toast, setToast] = useState(null);
 
+          // PWA In-App Document Viewer State
+          const [inAppViewer, setInAppViewer] = useState({ isOpen: false, url: '', title: '' });
+
           // Confirmation Modal State
           const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' });
 
@@ -571,34 +574,19 @@
 
           const handleMaskedView = (url, title = 'Documento Seguro') => {
             if (!url) return;
-            // Bloqueio de segurança simples para evitar problemas com Base64 via Iframe pesado (usar direto em nova guia)
+            // Base64 files can still cause lag in iframes, so we will attempt to prompt them natively instead if possible
             if (url.startsWith('data:')) {
-                window.open(url, '_blank');
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = title;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
                 return;
             }
             
-            const win = window.open('', '_blank');
-            if (!win) {
-               showToast('O navegador bloqueou a janela. Habilite os pop-ups.', 'error');
-               return;
-            }
-            win.document.write(`
-              <!DOCTYPE html>
-              <html lang="pt-BR">
-              <head>
-                <meta charset="UTF-8">
-                <title>${title}</title>
-                <style>
-                  body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #e2e8f0; }
-                  iframe { border: none; width: 100%; height: 100%; display: block; }
-                </style>
-              </head>
-              <body>
-                <iframe src="${url}" allowfullscreen></iframe>
-              </body>
-              </html>
-            `);
-            win.document.close();
+            // Ativa o modal para renderizar a interface de download ou visualização in-app (sem sair do PWA)
+            setInAppViewer({ isOpen: true, url, title });
           };
 
           useEffect(() => {
@@ -1083,6 +1071,23 @@
                   </div>
                 </div>
               </main>
+
+              {/* PWA In-App Viewer Modal */}
+              <Modal isOpen={inAppViewer.isOpen} onClose={() => setInAppViewer({ isOpen: false, url: '', title: '' })} title={inAppViewer.title} maxWidth="max-w-6xl">
+                 <div className="w-full flex-1 flex flex-col min-h-[65vh] bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden relative">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-slate-500 pointer-events-none z-0">
+                       <Download size={48} className="text-slate-300 dark:text-slate-700 mb-4 animate-bounce" />
+                       <h3 className="text-xl font-bold mb-2">Processando Arquivo...</h3>
+                       <p className="text-sm max-w-md mx-auto">
+                          Se o arquivo não pode ser lido no navegador (Certificado/Planilha), a janela de salvamento do seu dispositivo saltará na tela em instantes e você pode fechar isso aqui. <br/><br/>
+                          Se for um PDF ou Imagem, ele vai carregar automaticamente para leitura.
+                       </p>
+                    </div>
+                    {inAppViewer.url && (
+                        <iframe src={inAppViewer.url} className="w-full h-full flex-1 relative z-10 bg-transparent border-0 min-h-[65vh]" allowFullScreen></iframe>
+                    )}
+                 </div>
+              </Modal>
 
               {/* Modais Globais de Aviso */}
               {toast && (
@@ -3034,7 +3039,7 @@
                 docPdf.setFont("helvetica", "normal"); docPdf.setFontSize(9); docPdf.text("Assinatura do Recebedor", startX + 62, sigY + 5, { align: "center" });
                 docPdf.setFont("helvetica", "bold"); docPdf.text(emp.name || "-", startX + 62, sigY + 10, { align: "center" });
               }
-              window.open(docPdf.output('bloburl'), '_blank');
+              handleMaskedView(docPdf.output('bloburl'), 'Relatório Geral');
             } catch (err) { showToast('Erro ao gerar PDF.', 'error'); } finally { setIsPrinting(false); }
           };
 
@@ -7612,7 +7617,7 @@
                 docPdf.text(payeeName || "-", startX + w/2, sigY + 10, { align: "center" });
               }
               
-              window.open(docPdf.output('bloburl'), '_blank');
+              handleMaskedView(docPdf.output('bloburl'), 'Folha de Ponto');
               setPrintSelections({});
               
             } catch (err) {
