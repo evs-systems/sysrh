@@ -574,6 +574,16 @@
 
           const handleSecureFileAction = async (fileReferenceString, originalFileName = 'Documento') => {
             if (!fileReferenceString) return showToast('Arquivo/Link não cadastrado.', 'error');
+            
+            // Drible Anti-Popup Blocker: Abre a aba no exato milissegundo do clique
+            const newWin = window.open('', '_blank');
+            if (newWin) {
+                newWin.document.title = 'Acessando...';
+                newWin.document.body.innerHTML = '<h2 style="font-family: sans-serif; text-align: center; margin-top: 20%; color: #333;">Descriptografando arquivo seguro...</h2>';
+            } else {
+                return showToast('O seu navegador bloqueou a abertura do arquivo! Habilite os pop-ups.', 'error');
+            }
+
             try {
                showToast('Acessando arquivo seguro, aguarde...', 'info');
                const storageRef = ref(storage, fileReferenceString);
@@ -581,16 +591,16 @@
                const blobUrl = URL.createObjectURL(blob);
                const fileType = blob.type.toLowerCase();
 
-               if (fileType.includes('pdf')) {
-                  window.open(blobUrl, '_blank');
-               } else if (fileType.includes('image')) {
+               if (fileType.includes('image')) {
+                  newWin.close(); // Imagens abrem no Lightbox interno, então fechamos a aba
                   setImageViewer({ isOpen: true, url: blobUrl, name: originalFileName });
                } else {
-                  // Delega a ação para o navegador (Gera pop-up de Abrir/Salvar sem forçar renomear sem extensão)
-                  window.open(blobUrl, '_blank');
+                  // Delega PDFs e outros arquivos para o navegador renderizar ou disparar prompt
+                  newWin.location.href = blobUrl;
                }
             } catch (err) {
                console.error("Erro no acesso seguro:", err);
+               if (newWin) newWin.close();
                showToast('Acesso negado, expirado ou arquivo inexistente.', 'error');
             }
           };
