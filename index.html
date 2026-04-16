@@ -9060,7 +9060,8 @@
             return `Última Infração: ${lastOcc.type} (${lastOcc.reason}) em ${renderDate(lastOcc.date)}.`;
           };
 
-          const handleEmployeeChange = (empId) => {
+          const handleEmployeeChange = (e) => {
+            const empId = e.target.value;
             const maxIdx = getEmployeeMaxWarningIndex(empId);
             let nextType = '';
             if (maxIdx < PUNITIVE_TYPES.length - 1) {
