@@ -574,7 +574,8 @@
 
           const handleMaskedView = (url, title = 'Documento Seguro') => {
             if (!url) return;
-            // Base64 files can still cause lag in iframes, so we will attempt to prompt them natively instead if possible
+            
+            // Base64 entra via link direto (navegador processa sem PWA wrapper)
             if (url.startsWith('data:')) {
                 const a = document.createElement('a');
                 a.href = url;
@@ -585,7 +586,29 @@
                 return;
             }
             
-            // Ativa o modal para renderizar a interface de download ou visualização in-app (sem sair do PWA)
+            // Detecta se a URL apontará para um conteúdo que os navegadores renderizam no iFrame.
+            // PDFs e Imagens podem ficar dentro do modal PWA para leitura.
+            // Certificados (pfx, p12) ou Planilhas (xlsx, csv) não renderizam, vão gerar pop-up nativo de salvamento do SO.
+            const urlLower = url.toLowerCase();
+            const isRenderable = urlLower.includes('.pdf') || urlLower.includes('.jpg') || 
+                                 urlLower.includes('.jpeg') || urlLower.includes('.png') || 
+                                 urlLower.includes('.webp') || urlLower.includes('.gif') || 
+                                 urlLower.includes('.txt') || url.startsWith('blob:');
+
+            if (!isRenderable) {
+                // Arquivos que disparam download forçado ganham um iFrame cego (invisível).
+                // Isso impede a abertura de um modal inútil que não pode detectar "cancelamentos" do usuário
+                showToast('Iniciando transferência direta do arquivo...', 'info');
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
+                document.body.appendChild(iframe);
+                // Prevenção de vazamento de memória após o navegador assumir o download
+                setTimeout(() => document.body.removeChild(iframe), 30000); 
+                return;
+            }
+            
+            // Ativa o modal apenas para quem efetivamente tem renderização visual (sem sair do PWA)
             setInAppViewer({ isOpen: true, url, title });
           };
 
