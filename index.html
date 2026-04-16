@@ -591,7 +591,8 @@
                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000); // Cleans up memory
             } catch (err) {
                console.error("Erro no acesso seguro:", err);
-               showToast('Acesso negado, expirado ou arquivo inexistente.', 'error');
+               showToast('Erro de Segurança ou CORS. Verificando...', 'error');
+               alert("Detalhe Técnico do Bloqueio:\n" + err.message + "\n\nSe o erro for 'CORS', você precisa rodar a configuração de CORS no Google Cloud Shell. Se for 'unauthorized', a regra do Storage bloqueou.");
             }
           };
 
