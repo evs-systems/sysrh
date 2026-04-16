@@ -1150,7 +1150,7 @@
                   : [appUser.sector];
 
               accessibleSectors.forEach(sec => {
-                 const groupChatId = `group_${sec.replace(/\s+/g, '_')}`;
+                 const groupChatId = `group_${sec}`;
                  unsubs.push(onSnapshot(collection(db, `chats/${groupChatId}/messages`), (snap) => checkUnread(groupChatId, snap)));
               });
             }
@@ -1351,7 +1351,7 @@
 
                         {/* Lista de Grupos com Indicador de Não Lida */}
                         {chatTab === 'groups' && sectors.map(sector => {
-                          const groupChatId = `group_${sector.replace(/\s+/g, '_')}`;
+                          const groupChatId = `group_${sector}`;
                           const hasNewMsg = unreadChats[groupChatId];
                           return (
                             <div key={sector} onClick={() => openGroupChat(sector)} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
