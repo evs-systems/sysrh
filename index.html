@@ -9331,14 +9331,14 @@
                     <Select 
                       label="Penalidade" className="z-40" theme={theme} required 
                       value={formData.type} 
-                      onChange={val => setFormData({...formData, type: val})}
+                      onChange={e => setFormData({...formData, type: e.target.value})}
                       options={getTypeOptionsSafe(formData.employeeId)}
                       disabled={!formData.employeeId}
                     />
                     <Select 
                       label="Motivo" className="z-30" theme={theme} required 
                       value={formData.reason} 
-                      onChange={val => setFormData({...formData, reason: val})}
+                      onChange={e => setFormData({...formData, reason: e.target.value})}
                       options={REASONS.map(r => ({ value: r, label: r }))} 
                     />
                   </div>
