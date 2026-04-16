@@ -552,8 +552,7 @@
           // Notification State
           const [toast, setToast] = useState(null);
 
-          // Image Viewer State
-          const [imageViewer, setImageViewer] = useState({ isOpen: false, url: null, name: '' });
+          // Image Viewer State removido a pedido do usuário
 
           // Confirmation Modal State
           const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' });
@@ -572,35 +571,26 @@
             setConfirmDialog({ isOpen: true, message, onConfirm, confirmText, confirmVariant });
           };
 
-          const handleSecureFileAction = async (fileReferenceString, originalFileName = 'Documento') => {
+          const handleSecureFileAction = async (fileReferenceString) => {
             if (!fileReferenceString) return showToast('Arquivo/Link não cadastrado.', 'error');
             
-            // Drible Anti-Popup Blocker: Abre a aba no exato milissegundo do clique
-            const newWin = window.open('', '_blank');
-            if (newWin) {
-                newWin.document.title = 'Acessando...';
-                newWin.document.body.innerHTML = '<h2 style="font-family: sans-serif; text-align: center; margin-top: 20%; color: #333;">Descriptografando arquivo seguro...</h2>';
-            } else {
-                return showToast('O seu navegador bloqueou a abertura do arquivo! Habilite os pop-ups.', 'error');
-            }
-
             try {
-               showToast('Acessando arquivo seguro, aguarde...', 'info');
+               showToast('Preparando download seguro, aguarde...', 'info');
                const storageRef = ref(storage, fileReferenceString);
                const blob = await getBlob(storageRef);
                const blobUrl = URL.createObjectURL(blob);
-               const fileType = blob.type.toLowerCase();
-
-               if (fileType.includes('image')) {
-                  newWin.close(); // Imagens abrem no Lightbox interno, então fechamos a aba
-                  setImageViewer({ isOpen: true, url: blobUrl, name: originalFileName });
-               } else {
-                  // Delega PDFs e outros arquivos para o navegador renderizar ou disparar prompt
-                  newWin.location.href = blobUrl;
-               }
+               
+               // Força download nativo idêntico à exportação do Excel
+               const a = document.createElement('a');
+               a.href = blobUrl;
+               a.download = storageRef.name || 'documento';
+               document.body.appendChild(a);
+               a.click();
+               document.body.removeChild(a);
+               
+               setTimeout(() => URL.revokeObjectURL(blobUrl), 10000); // Cleans up memory
             } catch (err) {
                console.error("Erro no acesso seguro:", err);
-               if (newWin) newWin.close();
                showToast('Acesso negado, expirado ou arquivo inexistente.', 'error');
             }
           };
@@ -1090,26 +1080,7 @@
                 </div>
               </main>
 
-              {/* Lightbox: Visualizador de Imagem Padrão Seguro */}
-              <Modal isOpen={imageViewer.isOpen} onClose={() => { setImageViewer({ isOpen: false, url: null, name: '' }); if (imageViewer.url) URL.revokeObjectURL(imageViewer.url); }} title={imageViewer.name || 'Visualização de Arquivo'} maxWidth="max-w-4xl">
-                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-full relative bg-slate-100 dark:bg-slate-900 rounded-2xl flex items-center justify-center p-2 min-h-[50vh] max-h-[75vh] overflow-hidden">
-                       {imageViewer.url && <img src={imageViewer.url} alt={imageViewer.name} className="max-w-full max-h-full object-contain rounded-xl" />}
-                    </div>
-                    <div className="w-full flex justify-end">
-                       <Button variant="primary" theme={theme} icon={Download} onClick={() => {
-                          const a = document.createElement('a');
-                          a.href = imageViewer.url;
-                          a.download = imageViewer.name || 'Imagem_Salva';
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                       }}>
-                         Baixar Imagem Segura
-                       </Button>
-                    </div>
-                 </div>
-              </Modal>
+              {/* Modal Viewer Imagem Removido */}
 
               {/* Modais Globais de Aviso */}
               {toast && (
