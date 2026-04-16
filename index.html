@@ -465,12 +465,15 @@
                       <button
                         key={opt.value}
                         type="button"
+                        disabled={opt.disabled}
                         onClick={() => {
+                          if (opt.disabled) return;
                           onChange({ target: { value: opt.value } });
                           setIsOpen(false);
                           if(search) setSearchTerm('');
                         }}
                         className={`w-full text-left px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                          opt.disabled ? 'opacity-50 cursor-not-allowed text-slate-400 bg-slate-50 dark:bg-slate-800/30' :
                           value === opt.value 
                             ? `${theme.lightBg} ${theme.text} font-semibold shadow-md` 
                             : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:pl-5'
