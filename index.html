@@ -4882,6 +4882,7 @@
           const [currentDate, setCurrentDate] = useState(new Date());
           const [selectedDateStr, setSelectedDateStr] = useState(null);
           const [isModalOpen, setIsModalOpen] = useState(false);
+          const [isProcessing, setIsProcessing] = useState(false);
           const [formData, setFormData] = useState({ title: '', time: '', type: 'Lembrete', description: '' });
 
           const canWrite = appUser?.permissions?.calendar?.write;
@@ -5001,7 +5002,8 @@
 
           const handleSave = async (e) => {
             e.preventDefault();
-            if (!canWrite) return;
+            if (!canWrite || isProcessing) return;
+            setIsProcessing(true);
             try {
               await addDoc(collection(db, `${basePath}/events`), {
                 date: selectedDateStr,
@@ -5013,8 +5015,11 @@
               logAction('Cadastro', 'Agenda', `Adicionou evento: ${formData.title} para ${selectedDateStr}`);
               showToast('Evento adicionado!');
               setFormData({ title: '', time: '', type: 'Lembrete', description: '' });
+              setIsModalOpen(false);
             } catch (err) {
               showToast('Erro ao salvar evento.', 'error');
+            } finally {
+              setIsProcessing(false);
             }
           };
 
@@ -5180,8 +5185,9 @@
                         />
                       </div>
 
-                      <div className="flex justify-end pt-2">
-                        <Button variant="primary" theme={theme} type="submit" className="w-full sm:w-auto">Salvar na Agenda</Button>
+                      <div className="flex justify-end pt-2 gap-3">
+                        <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
+                        <Button variant="primary" theme={theme} type="submit" className="w-full sm:w-auto" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Salvar na Agenda'}</Button>
                       </div>
                     </form>
                   )}
@@ -5195,6 +5201,7 @@
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [editingId, setEditingId] = useState(null);
           const [activeSubTab, setActiveSubTab] = useState('empresas');
+          const [isProcessing, setIsProcessing] = useState(false);
           
           // Novos estados para Busca e Filtro de Certificados
           const [certSearchTerm, setCertSearchTerm] = useState('');
@@ -5460,7 +5467,8 @@
 
           const handleSave = async (e) => {
             e.preventDefault();
-            if (!canWrite) return;
+            if (!canWrite || isProcessing) return;
+            setIsProcessing(true);
             try {
               const payload = { ...formData };
               
@@ -5501,6 +5509,8 @@
               setIsModalOpen(false);
             } catch (err) {
               showToast('Erro ao salvar dados.', 'error');
+            } finally {
+              setIsProcessing(false);
             }
           };
 
@@ -5531,7 +5541,8 @@
 
           const handleRoomSave = async (e) => {
             e.preventDefault();
-            if (!canWrite) return;
+            if (!canWrite || isProcessing) return;
+            setIsProcessing(true);
             try {
               if (editingRoomId) {
                 await updateDoc(doc(db, `${basePath}/commercialRooms/${editingRoomId}`), roomFormData);
@@ -5545,6 +5556,8 @@
               setIsRoomModalOpen(false);
             } catch (err) {
               showToast('Erro ao salvar sala.', 'error');
+            } finally {
+              setIsProcessing(false);
             }
           };
 
@@ -6019,8 +6032,8 @@
                   </div>
 
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
-                    <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit">Salvar Empresa</Button>
+                    <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
+                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Salvar Empresa'}</Button>
                   </div>
                 </form>
               </Modal>
@@ -6117,8 +6130,8 @@
                      </div>
 
                      <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
-                        <Button variant="ghost" theme={theme} type="button" onClick={() => setIsRoomModalOpen(false)}>Cancelar</Button>
-                        <Button variant="primary" theme={theme} type="submit">Salvar Sala</Button>
+                        <Button variant="ghost" theme={theme} type="button" onClick={() => setIsRoomModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
+                        <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Salvar Sala'}</Button>
                      </div>
                   </form>
               </Modal>
@@ -7269,6 +7282,7 @@
 
         function PaymentsView({ theme, basePath, appUser, employees, payments, companies = [], showToast, logAction, requestConfirm, handleMaskedView }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
+          const [isProcessing, setIsProcessing] = useState(false);
           const [isEditModalOpen, setIsEditModalOpen] = useState(false);
           const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
           const [activeSubTab, setActiveSubTab] = useState('today');
@@ -7691,7 +7705,8 @@
 
           const handleSave = async (e) => {
             e.preventDefault();
-            if (!canWrite) return;
+            if (!canWrite || isProcessing) return;
+            setIsProcessing(true);
             const emp = formData.category === 'employee' ? employees.find(e => e.id === formData.employeeId) : null;
             const targetName = formData.category === 'employee' ? (emp?.name || 'Desconhecido') : formData.payeeName;
 
@@ -7726,6 +7741,8 @@
               setFormData({ category: 'employee', employeeId: '', payeeName: '', company: '', items: [{ amount: '', date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não', bankName: '', agency: '', account: '', pixKey: '' }] });
             } catch (err) {
               showToast('Erro ao programar pagamentos.', 'error');
+            } finally {
+              setIsProcessing(false);
             }
           };
 
@@ -7737,11 +7754,12 @@
 
           const handleBulkSave = async (e) => {
             e.preventDefault();
-            if (!canWrite) return;
+            if (!canWrite || isProcessing) return;
             if (bulkFormData.employeeIds.length === 0) {
                showToast('Selecione pelo menos um colaborador para programar o pagamento.', 'error');
                return;
             }
+            setIsProcessing(true);
 
             const missingAmounts = bulkFormData.employeeIds.some(id => !bulkFormData.employeeAmounts[id] || Number(bulkFormData.employeeAmounts[id]) <= 0);
             if (missingAmounts) {
@@ -7782,6 +7800,8 @@
               setBulkSearchTerm('');
             } catch (err) {
               showToast('Erro ao programar pagamentos em massa.', 'error');
+            } finally {
+              setIsProcessing(false);
             }
           };
 
@@ -8446,8 +8466,8 @@
                   </div>
                   
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
-                    <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit">Programar Pagamentos</Button>
+                    <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
+                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Programar Pagamentos'}</Button>
                   </div>
                 </form>
               </Modal>
@@ -8782,6 +8802,7 @@
 
         function RequestsView({ theme, basePath, appUser, employees, requests, showToast, logAction, requestConfirm }) {
           const [isModalOpen, setIsModalOpen] = useState(false);
+          const [isProcessing, setIsProcessing] = useState(false);
           const [editingId, setEditingId] = useState(null);
           const [activeSubTab, setActiveSubTab] = useState('ativas');
           const [formData, setFormData] = useState({ employeeId: '', type: 'Adiantamento', status: 'A fazer', date: '', description: '' });
@@ -8825,7 +8846,8 @@
 
           const handleSave = async (e) => {
             e.preventDefault();
-            if (!canWrite) return;
+            if (!canWrite || isProcessing) return;
+            setIsProcessing(true);
             const emp = employees.find(e => e.id === formData.employeeId);
             try {
               if (editingId) {
@@ -8840,6 +8862,8 @@
               setIsModalOpen(false);
             } catch (err) {
               showToast('Erro ao salvar.', 'error');
+            } finally {
+              setIsProcessing(false);
             }
           };
 
@@ -8987,8 +9011,8 @@
                   </div>
                   
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
-                    <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit">{editingId ? 'Atualizar' : 'Salvar'}</Button>
+                    <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
+                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : (editingId ? 'Atualizar' : 'Salvar')}</Button>
                   </div>
                 </form>
               </Modal>
