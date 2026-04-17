@@ -59,6 +59,7 @@
         "react-dom/client": "https://esm.sh/react-dom@19.2.5/client",
         "lucide-react": "https://esm.sh/lucide-react@0.344.0?external=react",
         "firebase/app": "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js",
+        "firebase/app-check": "https://www.gstatic.com/firebasejs/12.12.0/firebase-app-check.js",
         "firebase/auth": "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js",
         "firebase/firestore": "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js",
         "firebase/storage": "https://www.gstatic.com/firebasejs/12.12.0/firebase-storage.js"
@@ -205,7 +206,8 @@
           BarChart2, UserPlus, UserMinus, Loader2, RefreshCw, ShieldCheck,
           MessageSquare, Send, Reply, XCircle, Lightbulb
         } from 'lucide-react';
-        import { initializeApp, deleteApp } from 'firebase/app';
+        import { initializeApp } from 'firebase/app';
+        import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from 'firebase/auth';
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -222,6 +224,13 @@
         };
 
         const app = initializeApp(firebaseConfig);
+
+        // --- CONFIGURAÇÃO DO APP CHECK (RECAPTCHA ENTERPRISE) ---
+        const appCheck = initializeAppCheck(app, {
+          provider: new ReCaptchaEnterpriseProvider('6LexRbwsAAAAAASPPBpmdAu-Qw0QGq_yGcBuZNKl'),
+          isTokenAutoRefreshEnabled: true
+        });
+
         const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
