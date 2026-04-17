@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SysRH</title>
     
+    <!-- Política de Segurança de Conteúdo (CSP) -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://esm.sh https://www.gstatic.com;
+      style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com;
+      connect-src 'self' https://esm.sh https://*.googleapis.com https://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com;
+      img-src 'self' data: blob: https://*.googleapis.com https://*.firebasestorage.app https://*.googleusercontent.com;
+      frame-src 'self' blob: https://*.firebasestorage.app https://*.googleapis.com;
+      worker-src 'self' blob:;
+      object-src 'none';
+      base-uri 'self';
+    ">
     <!-- Ícone da Guia do Navegador (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
 
@@ -65,7 +78,7 @@
     </script>
 
     <!-- Babel Standalone para compilar o React (JSX) no navegador -->
-    <script src="https://unpkg.com/@babel/standalone@7.29.2/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.2/babel.min.js" integrity="sha384-dqDn4UOhYWNxmtwnMX6yC3WtZZ6Li8rF6rLB7cu0i/R7btvb+p+kObgEHto7VsJK" crossorigin="anonymous"></script>
     
     <!-- ========================================== -->
     <!-- INÍCIO DO CÓDIGO PWA (INSTALÁVEL)          -->
