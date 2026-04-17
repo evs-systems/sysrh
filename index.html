@@ -209,8 +209,12 @@
         import { initializeApp } from 'firebase/app';
         import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from 'firebase/auth';
-        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+        import { getFirestore, collection, doc, setDoc as fsSetDoc, getDoc, onSnapshot, addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+        const addDoc = (ref, data) => fsAddDoc(ref, { ...data, updatedAt: serverTimestamp() });
+        const updateDoc = (ref, data) => fsUpdateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+        const setDoc = (ref, data, opts) => fsSetDoc(ref, { ...data, updatedAt: serverTimestamp() }, opts);
 
         // --- FIREBASE CONFIGURATION (NATIVO E REAL) ---
         const firebaseConfig = {
