@@ -5187,7 +5187,7 @@
 
                       <div className="flex justify-end pt-2 gap-3">
                         <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                        <Button variant="primary" theme={theme} type="submit" className="w-full sm:w-auto" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Salvar na Agenda'}</Button>
+                        <Button variant="primary" theme={theme} type="submit" className="w-full sm:w-auto" loading={isProcessing}>Salvar na Agenda</Button>
                       </div>
                     </form>
                   )}
@@ -6033,7 +6033,7 @@
 
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
                     <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Salvar Empresa'}</Button>
+                    <Button variant="primary" theme={theme} type="submit" loading={isProcessing}>Salvar Empresa</Button>
                   </div>
                 </form>
               </Modal>
@@ -6131,7 +6131,7 @@
 
                      <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
                         <Button variant="ghost" theme={theme} type="button" onClick={() => setIsRoomModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                        <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Salvar Sala'}</Button>
+                        <Button variant="primary" theme={theme} type="submit" loading={isProcessing}>Salvar Sala</Button>
                      </div>
                   </form>
               </Modal>
@@ -7272,7 +7272,7 @@
 
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
                     <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : (editingId ? 'Atualizar' : 'Salvar Funcionário')}</Button>
+                    <Button variant="primary" theme={theme} type="submit" loading={isProcessing}>{editingId ? 'Atualizar' : 'Salvar Funcionário'}</Button>
                   </div>
                 </form>
               </Modal>
@@ -8467,7 +8467,7 @@
                   
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
                     <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Programar Pagamentos'}</Button>
+                    <Button variant="primary" theme={theme} type="submit" loading={isProcessing}>Programar Pagamentos</Button>
                   </div>
                 </form>
               </Modal>
@@ -9012,7 +9012,7 @@
                   
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
                     <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : (editingId ? 'Atualizar' : 'Salvar')}</Button>
+                    <Button variant="primary" theme={theme} type="submit" loading={isProcessing}>{editingId ? 'Atualizar' : 'Salvar'}</Button>
                   </div>
                 </form>
               </Modal>
@@ -9417,7 +9417,7 @@
 
                   <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
                     <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                    {canWrite && <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : 'Registrar'}</Button>}
+                    {canWrite && <Button variant="primary" theme={theme} type="submit" loading={isProcessing}>Registrar</Button>}
                   </div>
                 </form>
               </Modal>
@@ -9749,7 +9749,7 @@
 
                   <div className="pt-6 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
                     <Button variant="ghost" theme={theme} type="button" onClick={() => setIsModalOpen(false)} disabled={isProcessing}>Cancelar</Button>
-                    <Button variant="primary" theme={theme} type="submit" disabled={isProcessing}>{isProcessing ? 'Salvando...' : (editingId ? 'Atualizar' : 'Salvar Usuário')}</Button>
+                    <Button variant="primary" theme={theme} type="submit" loading={isProcessing}>{editingId ? 'Atualizar' : 'Salvar Usuário'}</Button>
                   </div>
                 </form>
               </Modal>
