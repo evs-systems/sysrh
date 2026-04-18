@@ -5,6 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SysRH</title>
     
+    <!-- Detecção de Tema de Alta Prioridade (Ignora Sistema, Usa LocalStorage) -->
+    <script>
+      (function() {
+        const isDark = localStorage.getItem('sysrh_darkMode') === 'true';
+        const bgColor = isDark ? '#0f172a' : '#f8fafc';
+        
+        // 1. Aplica a classe e o esquema de cor imediatamente
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = 'dark';
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.colorScheme = 'light';
+        }
+
+        // 2. Injeta o fundo bloqueando a renderização (Zero Flash Branco)
+        document.write('<style>html, body, .initial-splash { background-color: ' + bgColor + ' !important; }</style>');
+
+        // 3. Cria a meta tag theme-color para a barra do navegador/webapp
+        const metaTheme = document.createElement('meta');
+        metaTheme.name = 'theme-color';
+        metaTheme.id = 'dynamic-theme-color';
+        metaTheme.content = bgColor;
+        document.head.appendChild(metaTheme);
+      })();
+    </script>
+
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
       script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://esm.sh https://www.gstatic.com https://www.google.com https://www.recaptcha.net;
@@ -21,22 +48,9 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
 
-    <script>
-      (function() {
-        const stored = localStorage.getItem('sysrh_darkMode');
-        const isDark = stored === 'true' || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-          document.documentElement.style.backgroundColor = '#0f172a';
-        } else {
-          document.documentElement.style.backgroundColor = '#f8fafc';
-        }
-      })();
-    </script>
-
     <style>
-      :root { --bg-sysrh: #f8fafc; color-scheme: light; }
-      html.dark { --bg-sysrh: #0f172a; color-scheme: dark; }
+      :root { --bg-sysrh: #f8fafc; }
+      html.dark { --bg-sysrh: #0f172a; }
       
       html, body, .initial-splash { 
         background-color: var(--bg-sysrh) !important; 
@@ -44,9 +58,7 @@
         color: #1e293b;
       }
       
-      html.dark, html.dark body, html.dark .initial-splash { 
-        color: #f8fafc; 
-      }
+      html.dark, html.dark body, html.dark .initial-splash { color: #f8fafc; }
 
       .initial-splash {
         position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
@@ -194,12 +206,15 @@
         linkManifest.href = URL.createObjectURL(manifestBlob);
         document.head.appendChild(linkManifest);
 
-        // 4. Cor do tema para a barra de status de dispositivos móveis
-        const isDarkTheme = localStorage.getItem('sysrh_darkMode') === 'true';
-        const metaTheme = document.createElement('meta');
-        metaTheme.name = 'theme-color';
-        metaTheme.content = isDarkTheme ? '#0f172a' : '#f8fafc';
-        document.head.appendChild(metaTheme);
+        // 4. Injeção de Meta Theme-Color Adicional (Prevenção de Cache)
+        const metaThemeCheck = document.getElementById('dynamic-theme-color');
+        if (!metaThemeCheck) {
+            const extraMeta = document.createElement('meta');
+            extraMeta.name = 'theme-color';
+            extraMeta.id = 'dynamic-theme-color';
+            extraMeta.content = isDark ? '#0f172a' : '#f8fafc';
+            document.head.appendChild(extraMeta);
+        }
 
         // 5. Gerar e Registrar o Service Worker
         if ('serviceWorker' in navigator) {
@@ -631,9 +646,8 @@
           // App State
           const [activeTab, setActiveTab] = useState(localStorage.getItem('sysrh_activeTab') || 'dashboard');
           
-          // Inicialização imediata de estados para evitar flashes visuais
-          const initialIsDark = localStorage.getItem('sysrh_darkMode') === 'true' || 
-                               (localStorage.getItem('sysrh_darkMode') === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          // Inicialização imediata de estados baseada estritamente no LocalStorage
+          const initialIsDark = localStorage.getItem('sysrh_darkMode') === 'true';
           
           const [isDarkMode, setIsDarkMode] = useState(initialIsDark);
           const [themeName, setThemeName] = useState(localStorage.getItem('sysrh_theme') || 'blue');
@@ -852,13 +866,13 @@
 
           useEffect(() => {
             // Atualiza também a cor da barra de navegação/status do Safari e Android
-            const metaTheme = document.querySelector('meta[name="theme-color"]');
+            const metaTheme = document.getElementById('dynamic-theme-color');
             if (isDarkMode) {
               document.documentElement.classList.add('dark');
-              if (metaTheme) metaTheme.setAttribute('content', '#0f172a'); // Fundo Dark (slate-900)
+              if (metaTheme) metaTheme.setAttribute('content', '#0f172a');
             } else {
               document.documentElement.classList.remove('dark');
-              if (metaTheme) metaTheme.setAttribute('content', '#f8fafc'); // Fundo Light (slate-50)
+              if (metaTheme) metaTheme.setAttribute('content', '#f8fafc');
             }
           }, [isDarkMode]);
 
