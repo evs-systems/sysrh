@@ -20,6 +20,30 @@
     <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
+    
+    <script>
+      // INICIALIZAÇÃO IMEDIATA (Anti-Flash Branco)
+      (function() {
+        const darkMode = localStorage.getItem('sysrh_darkMode') === 'true';
+        if (darkMode) document.documentElement.classList.add('dark');
+      })();
+    </script>
+    
+    <style>
+      /* Estilo básico para garantir fundo correto ANTES do Tailwind carregar */
+      html.dark body { background-color: #0f172a !important; color: #f8fafc; }
+      html body { background-color: #f8fafc; color: #1e293b; transition: background-color 0.2s ease; }
+      
+      /* Spinner nativo antes do React acordar */
+      .initial-splash {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
+      }
+      .spinner {
+        width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
+        border-radius: 50%; animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
     <!-- Ícone da Guia do Navegador (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
 
@@ -193,7 +217,11 @@
 
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
-    <div id="root"></div>
+    <div id="root">
+        <div class="initial-splash">
+            <div class="spinner"></div>
+        </div>
+    </div>
 
     <!-- Adicionado data-compact="true" para silenciar o aviso de 500KB do Babel -->
     <script type="text/babel" data-type="module" data-compact="true">
@@ -883,13 +911,9 @@
             }
           };
 
-          if (loading) {
-            return (
-              <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-              </div>
-            );
-          }
+          // O loading inicial agora é controlado pelo HTML/CSS nativo em #root
+          // para evitar flashes brancos. O React apenas assume o controle quando pronto.
+          if (loading) return null;
 
           if (!appUser) {
             return (
