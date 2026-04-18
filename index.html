@@ -23,8 +23,9 @@
     
     <script>
       (function() {
-        const darkMode = localStorage.getItem('sysrh_darkMode') === 'true';
-        if (darkMode) {
+        const stored = localStorage.getItem('sysrh_darkMode');
+        const isDark = stored === 'true' || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
           document.documentElement.classList.add('dark');
           document.documentElement.style.backgroundColor = '#0f172a';
         } else {
@@ -34,24 +35,21 @@
     </script>
     
     <style>
-      /* Bloqueio total de flash branco */
-      :root { color-scheme: light; }
-      html.dark { color-scheme: dark; }
+      :root { --bg-sysrh: #f8fafc; color-scheme: light; }
+      html.dark { --bg-sysrh: #0f172a; color-scheme: dark; }
       
-      html, body { 
-        background-color: #f8fafc; 
+      html, body, .initial-splash { 
+        background-color: var(--bg-sysrh) !important; 
         margin: 0; padding: 0;
+        color: #1e293b;
       }
       
-      html.dark, html.dark body { 
-        background-color: #0f172a !important; 
+      html.dark, html.dark body, html.dark .initial-splash { 
         color: #f8fafc; 
       }
 
-      /* Splash Screen */
       .initial-splash {
         position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
-        background-color: inherit; /* Segue a cor do html/body definida acima */
       }
       .spinner {
         width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
@@ -73,9 +71,6 @@
 
     <!-- Estilos Customizados -->
     <style>
-        :root { color-scheme: light; }
-        .dark { color-scheme: dark; }
-        
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 20px; }
