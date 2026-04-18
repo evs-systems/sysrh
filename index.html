@@ -80,11 +80,9 @@
     }
     </script>
     
-    <!-- ========================================== -->
-    <!-- INÍCIO DO CÓDIGO PWA (INSTALÁVEL)          -->
-    <!-- ========================================== -->
+    <!-- PWA ASSETS GENERATOR -->
     <script>
-        // 1. Função para desenhar e gerar o ícone em PNG dinamicamente (Resolve o problema do "S" genérico)
+        // 1. Função para desenhar e gerar o ícone em PNG dinamicamente
         function generatePngIcon(size) {
             const canvas = document.createElement('canvas');
             canvas.width = size;
@@ -177,10 +175,9 @@
             `;
             const swBlob = new Blob([swCode], { type: 'application/javascript' });
             
-            window.addEventListener('load', () => {
+                window.addEventListener('load', () => {
                 navigator.serviceWorker.register(URL.createObjectURL(swBlob))
                     .catch(err => {
-                        // Silencia o erro no ambiente de testes (que usa blob URLs)
                         if (!window.location.href.startsWith('blob:')) {
                             console.log('Aviso do PWA:', err);
                         }
@@ -188,9 +185,7 @@
             });
         }
     </script>
-    <!-- ========================================== -->
-    <!-- FIM DO CÓDIGO PWA                          -->
-    <!-- ========================================== -->
+    <!-- PWA METADATA INITIALIZATION -->
 
 </head>
 <body class="text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
@@ -286,11 +281,8 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
         
-        // ========================================================================
-        // GRAVANDO DIRETAMENTE NA RAIZ DO BANCO DE DADOS (PRODUÇÃO / GITHUB PAGES)
-        // ========================================================================
+        // Configuração do caminho do banco de dados
         const basePath = '';
-        // ========================================================================
 
         // --- THEME CONFIGURATION ---
         const THEMES = {
@@ -2887,7 +2879,7 @@
             });
           }
 
-          // ====== CÁLCULO DE TOTAIS POR MÉTODO DE PAGAMENTO ======
+          // CÁLCULO DE TOTAIS POR MÉTODO DE PAGAMENTO
           let paymentMethodTotals = {};
           if (activeSubTab === 'transport') {
              currentList.forEach(emp => {
@@ -2986,7 +2978,7 @@
             } catch (error) { showToast('Erro ao conferir dados.', 'error'); }
           };
 
-          // ====== LÓGICA DE PAGAMENTO DO VT ======
+          // LÓGICA DE PAGAMENTO DO VT
           const openVtPayModal = (emp) => {
              setVtEmployeeToPay(emp);
              setVtPayForm([{ method: 'Site SpTrans', date: new Date().toLocaleDateString('pt-BR'), amount: (emp._remainingAmount || 0).toFixed(2) }]);
@@ -3030,7 +3022,7 @@
              } catch(err) { showToast('Erro ao registar o pagamento.', 'error'); }
           };
 
-          // ====== LÓGICA DE PAGAMENTO DE COMBUSTÍVEL (INDIVIDUAL E MASSA) ======
+          // LÓGICA DE PAGAMENTO DE COMBUSTÍVEL (INDIVIDUAL E MASSA)
           const openFuelPayModal = (emp) => { setFuelEmployeeToPay(emp); setFuelPayDate(new Date().toLocaleDateString('pt-BR')); setFuelPayModalOpen(true); };
           const confirmFuelPayment = async (e) => {
              e.preventDefault();
@@ -5607,7 +5599,7 @@
             try {
               const payload = { ...formData };
               
-              // Garante retrocompatibilidade pro Dashboard continuar funcionando sem ser alterado
+              // Sincronização de dados para o Dashboard
               if (payload.certificates && payload.certificates.length > 0) {
                   // Ordena para que o Dashboard veja na raiz o certificado que vence primeiro
                   const sortedCerts = [...payload.certificates].sort((a,b) => {
@@ -6559,7 +6551,7 @@
             });
           };
 
-          // ====== FUNÇÕES DE IMPORTAÇÃO E EXPORTAÇÃO ======
+          // FUNÇÕES DE IMPORTAÇÃO E EXPORTAÇÃO
           const handleExportCSV = () => {
             const headers = ['Nome', 'CPF', 'RG', 'Email', 'Contato', 'Data Nascimento', 'Genero', 'Estado Civil', 'Cargo', 'Departamento', 'Empresa', 'CNPJ', 'Unidade', 'Setor', 'Salario Base', 'Tipo', 'Status', 'Data Admissao', 'CEP', 'Rua', 'Numero', 'Bairro', 'Estado', 'Banco', 'Tipo Conta', 'Agencia', 'Conta', 'Tipo Pix', 'Chave Pix', 'Banco Diferente (Pix)', 'Banco do Pix', 'É Estágio', 'Início Estágio', 'Fim Estágio', 'É Contrato', 'Início Contrato', 'Fim Contrato'];
             const rows = currentList.map(e => [
