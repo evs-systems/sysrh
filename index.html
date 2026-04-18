@@ -4,15 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SysRH</title>
+
+    <!-- Meta tags nativas para informar o navegador sobre o tema antes do carregamento -->
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     
-    <!-- Prioridade de Renderização: Detecção nativa do modo escuro para evitar flash branco -->
+    <script>
+      (function() {
+        const stored = localStorage.getItem('sysrh_darkMode');
+        const isDark = stored === 'true' || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        const bgColor = isDark ? '#0f172a' : '#f8fafc';
+        if (isDark) document.documentElement.classList.add('dark');
+        // O document.write bloqueia a renderização até que o estilo seja aplicado, eliminando o flash branco
+        document.write('<style>html, body { background-color: ' + bgColor + ' !important; }</style>');
+      })();
+    </script>
+
     <style>
-      :root { --bg-sysrh: #f8fafc; color-scheme: light; }
-      @media (prefers-color-scheme: dark) {
-        :root { --bg-sysrh: #0f172a; color-scheme: dark; }
-      }
-      html.dark { --bg-sysrh: #0f172a; color-scheme: dark; }
-      html.light { --bg-sysrh: #f8fafc; color-scheme: light; }
+      :root { --bg-sysrh: #f8fafc; }
+      html.dark { --bg-sysrh: #0f172a; }
       
       html, body, .initial-splash { 
         background-color: var(--bg-sysrh) !important; 
@@ -46,18 +57,6 @@
     <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
-
-    <script>
-      (function() {
-        const stored = localStorage.getItem('sysrh_darkMode');
-        const isDark = stored === 'true' || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.add('light');
-        }
-      })();
-    </script>
     
     <!-- Ícone da Guia do Navegador (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
