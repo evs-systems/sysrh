@@ -69,33 +69,6 @@
     <!-- Ícone da Guia do Navegador (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
 
-    <!-- Tailwind CSS (via CDN) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: { extend: {} }
-        }
-    </script>
-
-    <!-- Estilos Customizados -->
-    <style>
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 20px; }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.3); }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(156, 163, 175, 0.6); }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.5); }
-        
-        @media print {
-            body * { visibility: hidden; }
-            .print-container, .print-container * { visibility: visible; }
-            .print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 0; margin: 0; }
-            .page-break { page-break-after: always; }
-            .no-print { display: none !important; }
-        }
-    </style>
-
     <!-- Import Map para carregar React, Lucide e Firebase via CDN -->
     <script type="importmap">
     {
@@ -111,20 +84,6 @@
       }
     }
     </script>
-
-    <!-- Filtro para silenciar o aviso de 500KB do Babel no console -->
-    <script>
-        const originalConsoleError = console.error;
-        console.error = function(...args) {
-            if (typeof args[0] === 'string' && args[0].includes('exceeds the max of 500KB')) {
-                return; // Ignora o aviso inofensivo do Babel
-            }
-            originalConsoleError.apply(console, args);
-        };
-    </script>
-
-    <!-- Babel Standalone para compilar o React (JSX) no navegador -->
-    <script src="https://unpkg.com/@babel/standalone@7.29.2/babel.min.js" integrity="sha384-dqDn4UOhYWNxmtwnMX6yC3WtZZ6Li8rF6rLB7cu0i/R7btvb+p+kObgEHto7VsJK" crossorigin="anonymous"></script>
     
     <!-- ========================================== -->
     <!-- INÍCIO DO CÓDIGO PWA (INSTALÁVEL)          -->
@@ -239,11 +198,52 @@
     <!-- ========================================== -->
 
 </head>
-<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
+<body class="text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
     <div id="initial-splash" class="initial-splash">
         <div class="spinner"></div>
     </div>
     <div id="root"></div>
+
+    <!-- Tailwind CSS (via CDN) - Movido para o final para evitar flash branco -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: {} }
+        }
+    </script>
+
+    <!-- Estilos Customizados -->
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 20px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.3); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(156, 163, 175, 0.6); }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.5); }
+        
+        @media print {
+            body * { visibility: hidden; }
+            .print-container, .print-container * { visibility: visible; }
+            .print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 0; margin: 0; }
+            .page-break { page-break-after: always; }
+            .no-print { display: none !important; }
+        }
+    </style>
+
+    <!-- Filtro para silenciar o aviso de 500KB do Babel no console -->
+    <script>
+        const originalConsoleError = console.error;
+        console.error = function(...args) {
+            if (typeof args[0] === 'string' && args[0].includes('exceeds the max of 500KB')) {
+                return; // Ignora o aviso inofensivo do Babel
+            }
+            originalConsoleError.apply(console, args);
+        };
+    </script>
+
+    <!-- Babel Standalone para compilar o React (JSX) no navegador -->
+    <script src="https://unpkg.com/@babel/standalone@7.29.2/babel.min.js" integrity="sha384-dqDn4UOhYWNxmtwnMX6yC3WtZZ6Li8rF6rLB7cu0i/R7btvb+p+kObgEHto7VsJK" crossorigin="anonymous"></script>
 
     <!-- Adicionado data-compact="true" para silenciar o aviso de 500KB do Babel -->
     <script type="text/babel" data-type="module" data-compact="true">
