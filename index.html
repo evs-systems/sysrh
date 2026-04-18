@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta id="dynamic-theme-color" name="theme-color" content="#f8fafc">
     <script>
       (function() {
         const isDark = localStorage.getItem('sysrh_darkMode') === 'true';
@@ -13,9 +12,9 @@
         } else {
           document.documentElement.style.colorScheme = 'light';
         }
-        // Injeção Síncrona: Bloqueia a renderização para definir fundo e barra ao mesmo tempo
+        // Injeção Síncrona: Define fundo e cor da barra ao mesmo tempo para evitar flashes
         document.write('<style>html, body { background-color: ' + bgColor + ' !important; }</style>');
-        document.getElementById('dynamic-theme-color').setAttribute('content', bgColor);
+        document.write('<meta name="theme-color" id="dynamic-theme-color" content="' + bgColor + '">');
       })();
     </script>
     <meta charset="UTF-8">
@@ -57,7 +56,7 @@
         position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
       }
       .spinner {
-        width: 48px; height: 48px; border: 3px solid rgba(156, 163, 175, 0.2); border-top-color: currentColor;
+        width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
         border-radius: 50%; animation: spin 0.8s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
@@ -92,10 +91,8 @@
             canvas.height = size;
             const ctx = canvas.getContext('2d');
             
-            const isDark = localStorage.getItem('sysrh_darkMode') === 'true';
-            
-            // Desenha o fundo (Sincronizado com o tema para evitar flash na barra do Windows)
-            ctx.fillStyle = isDark ? '#0f172a' : '#2563eb';
+            // Desenha o fundo azul com cantos arredondados
+            ctx.fillStyle = '#2563eb';
             const radius = size * 0.22;
             ctx.beginPath();
             ctx.moveTo(radius, 0);
