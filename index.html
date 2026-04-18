@@ -1751,7 +1751,16 @@
           // Renderiza os cards superiores apenas se o usuário tiver permissão daquela área
           const stats = [];
           if (showEmp) stats.push({ title: 'Total de Funcionários Ativos', value: activeEmployees.length, icon: Users, color: 'text-blue-500' });
-          if (showPay) stats.push({ title: 'Total Pago (Mês)', value: formatCurrency(payments.reduce((acc, curr) => acc + Number(curr.amount), 0)), icon: DollarSign, color: 'text-emerald-500' });
+          if (showPay) {
+            const monthPaymentsTotal = payments.filter(p => {
+              if (p.status !== 'Pago' || !p.paidAt) return false;
+              const d = new Date(p.paidAt);
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              const y = String(d.getFullYear());
+              return m === currentMonthStr && y === String(currentYear);
+            }).reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+            stats.push({ title: 'Total Pago (Mês)', value: formatCurrency(monthPaymentsTotal), icon: DollarSign, color: 'text-emerald-500' });
+          }
           if (showDisc) stats.push({ title: 'Solicitações Ativas', value: requests.filter(d => d.status !== 'Finalizado').length, icon: FileText, color: 'text-amber-500' });
           if (showOcc) stats.push({ title: 'Ocorrências no Mês', value: monthOccurrences, icon: AlertTriangle, color: 'text-rose-500' });
 
