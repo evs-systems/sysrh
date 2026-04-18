@@ -590,7 +590,7 @@
           const [loading, setLoading] = useState(true);
           
           // App State
-          const [activeTab, setActiveTab] = useState('dashboard');
+          const [activeTab, setActiveTab] = useState(localStorage.getItem('sysrh_activeTab') || 'dashboard');
           const [isDarkMode, setIsDarkMode] = useState(false);
           const [themeName, setThemeName] = useState('blue');
           const [wallpaper, setWallpaper] = useState('none');
@@ -608,6 +608,11 @@
           const [events, setEvents] = useState([]);
           const [systemUsers, setSystemUsers] = useState([]);
           const [logs, setLogs] = useState([]);
+
+          // Persistência de Aba
+          useEffect(() => {
+            localStorage.setItem('sysrh_activeTab', activeTab);
+          }, [activeTab]);
           
           // Notification State
           const [toast, setToast] = useState(null);
