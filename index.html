@@ -12,14 +12,9 @@
         } else {
           document.documentElement.style.colorScheme = 'light';
         }
+        // Injeção Síncrona: Define fundo e cor da barra ao mesmo tempo para evitar flashes
         document.write('<style>html, body { background-color: ' + bgColor + ' !important; }</style>');
-        
-        // Injeção imediata da meta tag com o ID correto para sincronização do React
-        const meta = document.createElement('meta');
-        meta.name = 'theme-color';
-        meta.id = 'dynamic-theme-color';
-        meta.content = bgColor;
-        document.head.appendChild(meta);
+        document.write('<meta name="theme-color" id="dynamic-theme-color" content="' + bgColor + '">');
       })();
     </script>
     <meta charset="UTF-8">
@@ -66,8 +61,8 @@
       }
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
-    <!-- Ícone da Guia do Navegador (Favicon) -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
+    <!-- Ícone da Guia do Navegador (Favicon) - Cor Neutra no carregamento -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
 
     <!-- Import Map para carregar React, Lucide e Firebase via CDN -->
     <script type="importmap">
