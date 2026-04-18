@@ -34,9 +34,13 @@
       html.dark body { background-color: #0f172a !important; color: #f8fafc; }
       html body { background-color: #f8fafc; color: #1e293b; transition: background-color 0.2s ease; }
       
-      /* Spinner nativo antes do React acordar */
+      /* Splash Screen (Sempre visível até o React terminar) */
       .initial-splash {
         position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
+        background-color: #f8fafc; /* Cor Light */
+      }
+      html.dark .initial-splash {
+        background-color: #0f172a; /* Cor Dark */
       }
       .spinner {
         width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
@@ -217,11 +221,10 @@
 
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
-    <div id="root">
-        <div class="initial-splash">
-            <div class="spinner"></div>
-        </div>
+    <div id="initial-splash" class="initial-splash">
+        <div class="spinner"></div>
     </div>
+    <div id="root"></div>
 
     <!-- Adicionado data-compact="true" para silenciar o aviso de 500KB do Babel -->
     <script type="text/babel" data-type="module" data-compact="true">
@@ -636,6 +639,18 @@
           const [events, setEvents] = useState([]);
           const [systemUsers, setSystemUsers] = useState([]);
           const [logs, setLogs] = useState([]);
+
+          // Gerencia a remoção do Splash Screen nativo
+          useEffect(() => {
+            if (!loading) {
+              const splash = document.getElementById('initial-splash');
+              if (splash) {
+                splash.style.opacity = '0';
+                splash.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => splash.remove(), 500);
+              }
+            }
+          }, [loading]);
 
           // Persistência de Aba
           useEffect(() => {
