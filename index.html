@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SysRH</title>
     
-    <!-- Política de Segurança de Conteúdo (CSP) -->
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
       script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://esm.sh https://www.gstatic.com https://www.google.com https://www.recaptcha.net;
@@ -18,11 +17,8 @@
       object-src 'none';
       base-uri 'self';
     ">
-    <!-- Proteção contra Clickjacking: Impede que o sistema seja embutido em iframes de outros sites -->
     <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
-    <!-- Privacidade de URL: Não vaza o endereço do sistema ao clicar em links externos -->
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <!-- Bloqueio de Hardware: Desativa acesso a câmera, microfone e GPS (não usados pelo sistema) -->
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
     <!-- Ícone da Guia do Navegador (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
@@ -538,8 +534,6 @@
           );
         };
 
-        // Componente de Privacidade (LGPD): Mascara dados sensíveis por padrão.
-        // Clique no ícone de olho para revelar temporariamente.
         const ProtectedData = ({ value, type = 'generic', className = '' }) => {
           const [isVisible, setIsVisible] = React.useState(false);
           if (!value) return <span className="text-slate-400 text-xs italic">N/A</span>;
@@ -687,7 +681,6 @@
                   if (uDoc.exists()) {
                     setAppUser({ id: currentUser.uid, ...uDoc.data() });
                   } else {
-                    // SEGURANÇA: Conta não cadastrada no sistema — negar acesso
                     console.warn('Conta Firebase sem perfil no sistema. Acesso negado.');
                     showToast('Sua conta não está cadastrada no sistema. Contate o administrador.', 'error');
                     await signOut(auth);
@@ -695,7 +688,6 @@
                   }
                 } catch (error) {
                   console.error("Erro ao buscar perfil do usuário:", error);
-                  // SEGURANÇA: Em caso de erro, negar acesso em vez de conceder permissões
                   showToast('Erro ao verificar suas permissões. Tente novamente.', 'error');
                   await signOut(auth);
                   setAppUser(null);
@@ -857,7 +849,6 @@
             try {
               await signInWithEmailAndPassword(auth, email, authForm.password);
             } catch (err) {
-              // SEGURANÇA: Apenas autenticação com contas pré-existentes (sem auto-criação)
               setAuthError('Usuário ou senha inválidos.');
               setIsLoggingIn(false);
             }
@@ -874,7 +865,6 @@
             try {
               if (!auth.currentUser) return;
               await updatePassword(auth.currentUser, newPassword);
-              // SEGURANÇA: Senha gerenciada exclusivamente pelo Firebase Auth (não salvar em texto plano no Firestore)
               
               showToast('Senha atualizada com sucesso!', 'success');
               logInteraction('Atualização', 'Segurança', 'Alterou a própria senha de acesso');
