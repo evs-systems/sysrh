@@ -22,25 +22,36 @@
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
     
     <script>
-      // INICIALIZAÇÃO IMEDIATA (Anti-Flash Branco)
       (function() {
         const darkMode = localStorage.getItem('sysrh_darkMode') === 'true';
-        if (darkMode) document.documentElement.classList.add('dark');
+        if (darkMode) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.backgroundColor = '#0f172a';
+        } else {
+          document.documentElement.style.backgroundColor = '#f8fafc';
+        }
       })();
     </script>
     
     <style>
-      /* Estilo básico para garantir fundo correto ANTES do Tailwind carregar */
-      html.dark body { background-color: #0f172a !important; color: #f8fafc; }
-      html body { background-color: #f8fafc; color: #1e293b; transition: background-color 0.2s ease; }
+      /* Bloqueio total de flash branco */
+      :root { color-scheme: light; }
+      html.dark { color-scheme: dark; }
       
-      /* Splash Screen (Sempre visível até o React terminar) */
+      html, body { 
+        background-color: #f8fafc; 
+        margin: 0; padding: 0;
+      }
+      
+      html.dark, html.dark body { 
+        background-color: #0f172a !important; 
+        color: #f8fafc; 
+      }
+
+      /* Splash Screen */
       .initial-splash {
         position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
-        background-color: #f8fafc; /* Cor Light */
-      }
-      html.dark .initial-splash {
-        background-color: #0f172a; /* Cor Dark */
+        background-color: inherit; /* Segue a cor do html/body definida acima */
       }
       .spinner {
         width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
