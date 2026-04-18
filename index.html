@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SysRH</title>
     
+    <!-- Prioridade de Renderização: Detecção nativa do modo escuro para evitar flash branco -->
+    <style>
+      :root { --bg-sysrh: #f8fafc; color-scheme: light; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg-sysrh: #0f172a; color-scheme: dark; }
+      }
+      html.dark { --bg-sysrh: #0f172a; color-scheme: dark; }
+      html.light { --bg-sysrh: #f8fafc; color-scheme: light; }
+      
+      html, body, .initial-splash { 
+        background-color: var(--bg-sysrh) !important; 
+        margin: 0; padding: 0;
+        color: #1e293b;
+      }
+      html.dark, html.dark body, html.dark .initial-splash { color: #f8fafc; }
+      
+      .initial-splash {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
+      }
+      .spinner {
+        width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
+        border-radius: 50%; animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
       script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://esm.sh https://www.gstatic.com https://www.google.com https://www.recaptcha.net;
@@ -27,36 +53,12 @@
         const isDark = stored === 'true' || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
         if (isDark) {
           document.documentElement.classList.add('dark');
-          document.documentElement.style.backgroundColor = '#0f172a';
         } else {
-          document.documentElement.style.backgroundColor = '#f8fafc';
+          document.documentElement.classList.add('light');
         }
       })();
     </script>
-
-    <style>
-      :root { --bg-sysrh: #f8fafc; color-scheme: light; }
-      html.dark { --bg-sysrh: #0f172a; color-scheme: dark; }
-      
-      html, body, .initial-splash { 
-        background-color: var(--bg-sysrh) !important; 
-        margin: 0; padding: 0;
-        color: #1e293b;
-      }
-      
-      html.dark, html.dark body, html.dark .initial-splash { 
-        color: #f8fafc; 
-      }
-
-      .initial-splash {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
-      }
-      .spinner {
-        width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
-        border-radius: 50%; animation: spin 0.8s linear infinite;
-      }
-      @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    
     <!-- Ícone da Guia do Navegador (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
 
