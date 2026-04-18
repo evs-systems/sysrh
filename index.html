@@ -180,7 +180,7 @@
                 start_url: window.location.pathname,
                 display: "standalone",
                 background_color: isDark ? "#0f172a" : "#f8fafc",
-                theme_color: isDark ? "#0f172a" : "#2563eb",
+                theme_color: isDark ? "#0f172a" : "#f8fafc",
                 description: "Sistema de Gestão de Recursos Humanos",
             icons: [
                 { src: icon192, sizes: "192x192", type: "image/png", purpose: "any maskable" },
@@ -198,7 +198,7 @@
         const isDarkTheme = localStorage.getItem('sysrh_darkMode') === 'true';
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
-        metaTheme.content = isDarkTheme ? '#0f172a' : '#2563eb';
+        metaTheme.content = isDarkTheme ? '#0f172a' : '#f8fafc';
         document.head.appendChild(metaTheme);
 
         // 5. Gerar e Registrar o Service Worker
