@@ -178,13 +178,14 @@
         document.head.appendChild(appleIcon);
 
         // 3. Gerar e Injetar o Arquivo Manifest Dinamicamente com os PNGs
+        const isDark = localStorage.getItem('sysrh_darkMode') === 'true';
         const manifest = {
             name: "SysRH - Gestão Integrada",
             short_name: "SysRH",
             start_url: window.location.pathname,
             display: "standalone",
-            background_color: "#f8fafc",
-            theme_color: "#2563eb",
+            background_color: isDark ? "#0f172a" : "#f8fafc",
+            theme_color: isDark ? "#0f172a" : "#2563eb",
             description: "Sistema de Gestão de Recursos Humanos",
             icons: [
                 { src: icon192, sizes: "192x192", type: "image/png", purpose: "any maskable" },
@@ -199,9 +200,10 @@
         document.head.appendChild(linkManifest);
 
         // 4. Cor do tema para a barra de status de dispositivos móveis
+        const isDarkTheme = localStorage.getItem('sysrh_darkMode') === 'true';
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
-        metaTheme.content = '#2563eb';
+        metaTheme.content = isDarkTheme ? '#0f172a' : '#2563eb';
         document.head.appendChild(metaTheme);
 
         // 5. Gerar e Registrar o Service Worker
