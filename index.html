@@ -9175,7 +9175,7 @@
             '1ª Escrita',
             '2ª Escrita',
             '3ª Escrita',
-            'Suspensão',
+            '1ª Suspensão',
             '2ª Suspensão',
             '3ª Suspensão'
           ];
@@ -9506,7 +9506,7 @@
                   
                   <Input 
                     label="Referência da Infração (Dias ou ocorrências geradoras)" 
-                    theme={theme} 
+                    theme={theme} required
                     value={formData.reference || ''} 
                     onChange={e => setFormData({...formData, reference: e.target.value})} 
                     placeholder="Ex: Falta injustificada do dia 12/04 / Atrasos dos dias 10 e 11" 
