@@ -1,36 +1,33 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SysRH</title>
-    
-    <!-- Detecção de Tema de Alta Prioridade (Ignora Sistema, Usa LocalStorage) -->
     <script>
       (function() {
         const isDark = localStorage.getItem('sysrh_darkMode') === 'true';
         const bgColor = isDark ? '#0f172a' : '#f8fafc';
-        
-        // 1. Aplica a classe e o esquema de cor imediatamente
+        document.documentElement.style.backgroundColor = bgColor;
         if (isDark) {
           document.documentElement.classList.add('dark');
           document.documentElement.style.colorScheme = 'dark';
         } else {
-          document.documentElement.classList.remove('dark');
           document.documentElement.style.colorScheme = 'light';
         }
-
-        // 2. Injeta o fundo bloqueando a renderização (Zero Flash Branco)
-        document.write('<style>html, body, .initial-splash { background-color: ' + bgColor + ' !important; }</style>');
-
-        // 3. Cria a meta tag theme-color para a barra do navegador/webapp
-        const metaTheme = document.createElement('meta');
-        metaTheme.name = 'theme-color';
-        metaTheme.id = 'dynamic-theme-color';
-        metaTheme.content = bgColor;
-        document.head.appendChild(metaTheme);
+        document.write('<style>html, body { background-color: ' + bgColor + ' !important; }</style>');
+        
+        // Injeção imediata da meta tag com o ID correto para sincronização do React
+        const meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        meta.id = 'dynamic-theme-color';
+        meta.content = bgColor;
+        document.head.appendChild(meta);
       })();
     </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SysRH</title>
+    
+    <!-- Meta tags nativas para informar o navegador -->
+    <meta name="color-scheme" content="light dark">
 
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
@@ -200,15 +197,14 @@
             ]
         };
         
-        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestData = "data:application/json;base64," + btoa(JSON.stringify(manifest));
         const linkManifest = document.createElement('link');
         linkManifest.rel = 'manifest';
-        linkManifest.href = URL.createObjectURL(manifestBlob);
+        linkManifest.href = manifestData;
         document.head.appendChild(linkManifest);
 
-        // 4. Injeção de Meta Theme-Color Adicional (Prevenção de Cache)
-        const metaThemeCheck = document.getElementById('dynamic-theme-color');
-        if (!metaThemeCheck) {
+        // 4. Garantir que a Meta Theme-Color existe para o React
+        if (!document.getElementById('dynamic-theme-color')) {
             const extraMeta = document.createElement('meta');
             extraMeta.name = 'theme-color';
             extraMeta.id = 'dynamic-theme-color';
