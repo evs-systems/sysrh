@@ -9226,11 +9226,7 @@
             const empOccurrences = occurrences.filter(o => o.employeeId === empId);
             let maxIndex = -1;
             empOccurrences.forEach(o => {
-              // Ajuste de compatibilidade: trata nome antigo e novo como o mesmo índice
-              let typeToLookup = o.type;
-              if (typeToLookup === 'Suspensão') typeToLookup = '1ª Suspensão';
-              
-              const idx = PUNITIVE_TYPES.indexOf(typeToLookup);
+              const idx = PUNITIVE_TYPES.indexOf(o.type);
               if (idx > maxIndex) maxIndex = idx;
             });
             return maxIndex;
