@@ -681,8 +681,16 @@
           // PWA In-App Document Viewer State
           const [inAppViewer, setInAppViewer] = useState({ isOpen: false, url: '', title: '' });
 
-          // Confirmation Modal State
-          const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' });
+          // Confirmation Modal State (Agora suporta motivo obrigatório)
+          const [confirmDialog, setConfirmDialog] = useState({ 
+            isOpen: false, 
+            message: '', 
+            onConfirm: null, 
+            confirmText: 'Excluir', 
+            confirmVariant: 'danger',
+            requireReason: false,
+            tempReason: ''
+          });
 
           // Login/Setup State
           const [authForm, setAuthForm] = useState({ username: '', password: '' });
@@ -694,8 +702,16 @@
             setTimeout(() => setToast(null), 3000);
           };
 
-          const requestConfirm = (message, onConfirm, confirmText = 'Excluir', confirmVariant = 'danger') => {
-            setConfirmDialog({ isOpen: true, message, onConfirm, confirmText, confirmVariant });
+          const requestConfirm = (message, onConfirm, confirmText = 'Excluir', confirmVariant = 'danger', requireReason = false) => {
+            setConfirmDialog({ 
+              isOpen: true, 
+              message, 
+              onConfirm, 
+              confirmText, 
+              confirmVariant,
+              requireReason,
+              tempReason: ''
+            });
           };
 
           const handleMaskedView = (url, title = 'Documento Seguro') => {
@@ -1243,7 +1259,7 @@
               {/* Modal de Confirmação Seguro (Substitui window.confirm) */}
               {confirmDialog.isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setConfirmDialog({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' })}></div>
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}></div>
                   <div className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl p-6 w-full max-w-sm flex flex-col animate-in zoom-in-95 duration-200">
                     <div className="flex items-center gap-4 text-amber-500 mb-4">
                       <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex-shrink-0">
@@ -1251,13 +1267,34 @@
                       </div>
                       <h3 className="text-lg font-bold text-slate-800 dark:text-white">Confirmação</h3>
                     </div>
-                    <p className="text-slate-600 dark:text-slate-300 mb-6 font-medium leading-relaxed">{confirmDialog.message}</p>
-                    <div className="flex justify-end gap-3">
-                      <Button variant="ghost" theme={theme} onClick={() => setConfirmDialog({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' })}>Cancelar</Button>
-                      <Button variant={confirmDialog.confirmVariant || 'danger'} theme={theme} onClick={() => {
-                        if (confirmDialog.onConfirm) confirmDialog.onConfirm();
-                        setConfirmDialog({ isOpen: false, message: '', onConfirm: null, confirmText: 'Excluir', confirmVariant: 'danger' });
-                      }}>{confirmDialog.confirmText || 'Excluir'}</Button>
+                    <p className="text-slate-600 dark:text-slate-300 mb-4 font-medium leading-relaxed">{confirmDialog.message}</p>
+                    
+                    {confirmDialog.requireReason && (
+                      <div className="mb-6 animate-in slide-in-from-top-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Motivo da Exclusão (Obrigatório)</label>
+                        <textarea
+                          placeholder="Justifique a remoção deste registro..."
+                          className="w-full h-24 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all resize-none"
+                          value={confirmDialog.tempReason}
+                          onChange={e => setConfirmDialog({...confirmDialog, tempReason: e.target.value})}
+                          autoFocus
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 font-semibold">
+                      <Button variant="ghost" theme={theme} onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}>Cancelar</Button>
+                      <Button 
+                        variant={confirmDialog.confirmVariant || 'danger'} 
+                        theme={theme} 
+                        disabled={confirmDialog.requireReason && !confirmDialog.tempReason.trim()}
+                        onClick={() => {
+                          if (confirmDialog.onConfirm) confirmDialog.onConfirm(confirmDialog.tempReason);
+                          setConfirmDialog({ ...confirmDialog, isOpen: false });
+                        }}
+                      >
+                        {confirmDialog.confirmText || 'Excluir'}
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -9258,15 +9295,15 @@
 
           const handleDelete = (id, typeName, empName) => {
             if (!canDelete) return;
-            requestConfirm(`Tem certeza que deseja excluir a ocorrência: ${typeName} de ${empName}?`, async () => {
+            requestConfirm(`Tem certeza que deseja excluir a ocorrência: ${typeName} de ${empName}?`, async (reasonValue) => {
               try {
                 await deleteDoc(doc(db, `${basePath}/occurrences/${id}`));
                 showToast('Ocorrência removida.', 'success');
-                logAction('Exclusão', 'Ocorrências', `Removeu ocorrência de ${empName}`);
+                logAction('Exclusão', 'Ocorrências', `Removeu ocorrência de ${empName}. Motivo: ${reasonValue}`);
               } catch (e) {
                 showToast('Erro ao remover.', 'error');
               }
-            });
+            }, 'Excluir', 'danger', true);
           };
 
           const monthOptions = [
