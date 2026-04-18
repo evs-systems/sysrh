@@ -62,7 +62,7 @@
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
     <!-- Ícone da Guia do Navegador (Favicon) - Cor Neutra no carregamento -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='5' fill='%232563eb'/><path d='M3.5 12H7L10.5 6L14 19L17.5 12H20.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 
     <!-- Import Map para carregar React, Lucide e Firebase via CDN -->
     <script type="importmap">
@@ -132,6 +132,10 @@
         appleIcon.rel = 'apple-touch-icon';
         appleIcon.href = icon192;
         document.head.appendChild(appleIcon);
+        
+        // 3. Atualizar o favicon do navegador com o ícone gerado (32px para nitidez)
+        const favicon = document.querySelector('link[rel="icon"]');
+        if (favicon) favicon.href = generatePngIcon(32);
 
         // 3. Gerar e Injetar o Arquivo Manifest Dinamicamente com os PNGs
             const isDark = localStorage.getItem('sysrh_darkMode') === 'true';
