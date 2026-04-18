@@ -5,19 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SysRH</title>
 
-    <!-- Meta tags nativas para informar o navegador sobre o tema antes do carregamento -->
-    <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    
+    <!-- Detecção de Tema de Alta Prioridade (Zero Flash) -->
     <script>
       (function() {
         const stored = localStorage.getItem('sysrh_darkMode');
         const isDark = stored === 'true' || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
         const bgColor = isDark ? '#0f172a' : '#f8fafc';
-        if (isDark) document.documentElement.classList.add('dark');
-        // O document.write bloqueia a renderização até que o estilo seja aplicado, eliminando o flash branco
+        
+        // 1. Aplica a classe dark imediatamente
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = 'dark';
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.colorScheme = 'light';
+        }
+
+        // 2. Injeta o estilo de fundo bloqueando a renderização (evita flash branco)
         document.write('<style>html, body { background-color: ' + bgColor + ' !important; }</style>');
+
+        // 3. Define a cor da barra do navegador (theme-color) instantaneamente
+        const metaTheme = document.createElement('meta');
+        metaTheme.name = 'theme-color';
+        metaTheme.id = 'dynamic-theme-color';
+        metaTheme.content = bgColor;
+        document.head.appendChild(metaTheme);
       })();
     </script>
 
@@ -194,13 +206,6 @@
         linkManifest.rel = 'manifest';
         linkManifest.href = URL.createObjectURL(manifestBlob);
         document.head.appendChild(linkManifest);
-
-        // 4. Cor do tema para a barra de status de dispositivos móveis
-        const isDarkTheme = localStorage.getItem('sysrh_darkMode') === 'true';
-        const metaTheme = document.createElement('meta');
-        metaTheme.name = 'theme-color';
-        metaTheme.content = isDarkTheme ? '#0f172a' : '#f8fafc';
-        document.head.appendChild(metaTheme);
 
         // 5. Gerar e Registrar o Service Worker
         if ('serviceWorker' in navigator) {
@@ -853,7 +858,7 @@
 
           useEffect(() => {
             // Atualiza também a cor da barra de navegação/status do Safari e Android
-            const metaTheme = document.querySelector('meta[name="theme-color"]');
+            const metaTheme = document.getElementById('dynamic-theme-color');
             if (isDarkMode) {
               document.documentElement.classList.add('dark');
               if (metaTheme) metaTheme.setAttribute('content', '#0f172a'); // Fundo Dark (slate-900)
