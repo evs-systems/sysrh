@@ -1274,9 +1274,14 @@
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Motivo da Exclusão (Obrigatório)</label>
                         <textarea
                           placeholder="Justifique a remoção deste registro..."
-                          className="w-full h-24 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all resize-none"
+                          className="w-full min-h-[44px] p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all resize-none overflow-hidden"
+                          rows="1"
                           value={confirmDialog.tempReason}
-                          onChange={e => setConfirmDialog({...confirmDialog, tempReason: e.target.value})}
+                          onChange={e => {
+                            setConfirmDialog({...confirmDialog, tempReason: e.target.value});
+                            e.target.style.height = 'auto';
+                            e.target.style.height = e.target.scrollHeight + 'px';
+                          }}
                           autoFocus
                         />
                       </div>
