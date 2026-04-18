@@ -20,43 +20,6 @@
     <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
-    
-    <script>
-      (function() {
-        const stored = localStorage.getItem('sysrh_darkMode');
-        const isDark = stored === 'true' || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-          document.documentElement.style.backgroundColor = '#0f172a';
-        } else {
-          document.documentElement.style.backgroundColor = '#f8fafc';
-        }
-      })();
-    </script>
-    
-    <style>
-      :root { --bg-sysrh: #f8fafc; color-scheme: light; }
-      html.dark { --bg-sysrh: #0f172a; color-scheme: dark; }
-      
-      html, body, .initial-splash { 
-        background-color: var(--bg-sysrh) !important; 
-        margin: 0; padding: 0;
-        color: #1e293b;
-      }
-      
-      html.dark, html.dark body, html.dark .initial-splash { 
-        color: #f8fafc; 
-      }
-
-      .initial-splash {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;
-      }
-      .spinner {
-        width: 48px; height: 48px; border: 3px solid #2563eb33; border-top-color: #2563eb;
-        border-radius: 50%; animation: spin 0.8s linear infinite;
-      }
-      @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
     <!-- Ícone da Guia do Navegador (Favicon) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'></polyline></svg>">
 
@@ -71,6 +34,9 @@
 
     <!-- Estilos Customizados -->
     <style>
+        :root { color-scheme: light; }
+        .dark { color-scheme: dark; }
+        
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 20px; }
@@ -173,14 +139,13 @@
         document.head.appendChild(appleIcon);
 
         // 3. Gerar e Injetar o Arquivo Manifest Dinamicamente com os PNGs
-        const isDark = localStorage.getItem('sysrh_darkMode') === 'true';
         const manifest = {
             name: "SysRH - Gestão Integrada",
             short_name: "SysRH",
             start_url: window.location.pathname,
             display: "standalone",
-            background_color: isDark ? "#0f172a" : "#f8fafc",
-            theme_color: isDark ? "#0f172a" : "#2563eb",
+            background_color: "#f8fafc",
+            theme_color: "#2563eb",
             description: "Sistema de Gestão de Recursos Humanos",
             icons: [
                 { src: icon192, sizes: "192x192", type: "image/png", purpose: "any maskable" },
@@ -195,10 +160,9 @@
         document.head.appendChild(linkManifest);
 
         // 4. Cor do tema para a barra de status de dispositivos móveis
-        const isDarkTheme = localStorage.getItem('sysrh_darkMode') === 'true';
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
-        metaTheme.content = isDarkTheme ? '#0f172a' : '#2563eb';
+        metaTheme.content = '#2563eb';
         document.head.appendChild(metaTheme);
 
         // 5. Gerar e Registrar o Service Worker
@@ -229,9 +193,6 @@
 
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
-    <div id="initial-splash" class="initial-splash">
-        <div class="spinner"></div>
-    </div>
     <div id="root"></div>
 
     <!-- Adicionado data-compact="true" para silenciar o aviso de 500KB do Babel -->
@@ -629,15 +590,10 @@
           const [loading, setLoading] = useState(true);
           
           // App State
-          const [activeTab, setActiveTab] = useState(localStorage.getItem('sysrh_activeTab') || 'dashboard');
-          
-          // Inicialização imediata de estados para evitar flashes visuais
-          const initialIsDark = localStorage.getItem('sysrh_darkMode') === 'true' || 
-                               (localStorage.getItem('sysrh_darkMode') === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          
-          const [isDarkMode, setIsDarkMode] = useState(initialIsDark);
-          const [themeName, setThemeName] = useState(localStorage.getItem('sysrh_theme') || 'blue');
-          const [wallpaper, setWallpaper] = useState(localStorage.getItem('sysrh_wallpaper') || 'none');
+          const [activeTab, setActiveTab] = useState('dashboard');
+          const [isDarkMode, setIsDarkMode] = useState(false);
+          const [themeName, setThemeName] = useState('blue');
+          const [wallpaper, setWallpaper] = useState('none');
           const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
           const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
           const theme = THEMES[themeName];
@@ -652,23 +608,6 @@
           const [events, setEvents] = useState([]);
           const [systemUsers, setSystemUsers] = useState([]);
           const [logs, setLogs] = useState([]);
-
-          // Gerencia a remoção do Splash Screen nativo
-          useEffect(() => {
-            if (!loading) {
-              const splash = document.getElementById('initial-splash');
-              if (splash) {
-                splash.style.opacity = '0';
-                splash.style.transition = 'opacity 0.5s ease';
-                setTimeout(() => splash.remove(), 500);
-              }
-            }
-          }, [loading]);
-
-          // Persistência de Aba
-          useEffect(() => {
-            localStorage.setItem('sysrh_activeTab', activeTab);
-          }, [activeTab]);
           
           // Notification State
           const [toast, setToast] = useState(null);
@@ -939,9 +878,13 @@
             }
           };
 
-          // O loading inicial agora é controlado pelo HTML/CSS nativo em #root
-          // para evitar flashes brancos. O React apenas assume o controle quando pronto.
-          if (loading) return null;
+          if (loading) {
+            return (
+              <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+              </div>
+            );
+          }
 
           if (!appUser) {
             return (
