@@ -255,7 +255,11 @@
         import { initializeApp } from 'firebase/app';
         import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from 'firebase/auth';
-        import { getFirestore, collection, doc, setDoc as fsSetDoc, getDoc, onSnapshot, addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+        import { 
+          getFirestore, collection, doc, setDoc as fsSetDoc, getDoc, onSnapshot, 
+          addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc, serverTimestamp,
+          query, where, orderBy, limit 
+        } from 'firebase/firestore';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
         const addDoc = (ref, data) => fsAddDoc(ref, { ...data, updatedAt: serverTimestamp() });
@@ -856,39 +860,39 @@
               }
             };
 
-            const unsubSystemUsers = onSnapshot(collection(db, `${basePath}/systemUsers`), 
+            const unsubSystemUsers = onSnapshot(query(collection(db, `${basePath}/systemUsers`), orderBy('name', 'asc')), 
               (snapshot) => { setSystemUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubCompanies = onSnapshot(collection(db, `${basePath}/companies`), 
+            const unsubCompanies = onSnapshot(query(collection(db, `${basePath}/companies`), orderBy('name', 'asc')), 
               (snapshot) => { setCompanies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubCommercialRooms = onSnapshot(collection(db, `${basePath}/commercialRooms`), 
+            const unsubCommercialRooms = onSnapshot(query(collection(db, `${basePath}/commercialRooms`), orderBy('name', 'asc')), 
               (snapshot) => { setCommercialRooms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubEmployees = onSnapshot(collection(db, `${basePath}/employees`), 
+            const unsubEmployees = onSnapshot(query(collection(db, `${basePath}/employees`), orderBy('name', 'asc')), 
               (snapshot) => { setEmployees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubPayments = onSnapshot(collection(db, `${basePath}/payments`), 
+            const unsubPayments = onSnapshot(query(collection(db, `${basePath}/payments`), orderBy('updatedAt', 'desc')), 
               (snapshot) => { setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubRequests = onSnapshot(collection(db, `${basePath}/requests`), 
+            const unsubRequests = onSnapshot(query(collection(db, `${basePath}/requests`), orderBy('updatedAt', 'desc')), 
               (snapshot) => { setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubOccurrences = onSnapshot(collection(db, `${basePath}/occurrences`), 
+            const unsubOccurrences = onSnapshot(query(collection(db, `${basePath}/occurrences`), orderBy('updatedAt', 'desc')), 
               (snapshot) => { setOccurrences(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubEvents = onSnapshot(collection(db, `${basePath}/events`), 
+            const unsubEvents = onSnapshot(query(collection(db, `${basePath}/events`), orderBy('date', 'asc')), 
               (snapshot) => { setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubLogs = onSnapshot(collection(db, `${basePath}/logs`), 
+            const unsubLogs = onSnapshot(query(collection(db, `${basePath}/logs`), orderBy('timestamp', 'desc'), limit(100)), 
               (snapshot) => { setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
