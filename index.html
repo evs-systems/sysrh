@@ -287,7 +287,6 @@
         
         // Configuração do caminho do banco de dados
         const basePath = '';
-
         // --- THEME CONFIGURATION ---
         const THEMES = {
           blue: { main: 'blue', bg: 'bg-blue-600', hover: 'hover:bg-blue-700', text: 'text-blue-600', darkText: 'dark:text-blue-400', border: 'border-blue-500', ring: 'focus:ring-blue-500', lightBg: 'bg-blue-50 dark:bg-blue-900/20' },
@@ -308,6 +307,73 @@
         };
         const formatCPF = (cpf) => cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") || '';
         const generateId = () => Math.random().toString(36).substr(2, 9);
+        const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
+
+        const sanitizeFileName = (name) => {
+          const normalized = String(name || '')
+            .replace(/[\/\\:*?"<>|]/g, '_')
+            .replace(/\s+/g, ' ')
+            .trim();
+          return normalized.slice(0, 120) || `arquivo_${Date.now()}`;
+        };
+
+        const getFileHeader = async (file, bytes = 16) => {
+          const buffer = await file.slice(0, bytes).arrayBuffer();
+          return new Uint8Array(buffer);
+        };
+
+        const hasSignature = (header, sig) => sig.every((v, i) => header[i] === v);
+
+        const hasWebPSignature = (header) => {
+          const riff = [0x52, 0x49, 0x46, 0x46];
+          const webp = [0x57, 0x45, 0x42, 0x50];
+          return hasSignature(header, riff) &&
+            header[8] === webp[0] && header[9] === webp[1] && header[10] === webp[2] && header[11] === webp[3];
+        };
+
+        const validateFileForUpload = async (file, mode) => {
+          if (!file) return { ok: false, reason: 'Arquivo inválido.' };
+          if (file.size > MAX_UPLOAD_SIZE) return { ok: false, reason: 'O arquivo excede o limite de 5MB.' };
+
+          const safeName = sanitizeFileName(file.name);
+          const lowerName = safeName.toLowerCase();
+          const header = await getFileHeader(file, 12);
+
+          const isPdf = hasSignature(header, [0x25, 0x50, 0x44, 0x46]); // %PDF
+          const isJpeg = hasSignature(header, [0xFF, 0xD8, 0xFF]);
+          const isPng = hasSignature(header, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+          const isGif = hasSignature(header, [0x47, 0x49, 0x46, 0x38]);
+          const isWebp = hasWebPSignature(header);
+
+          if (mode === 'pdf') {
+            if (file.type !== 'application/pdf' || !isPdf) {
+              return { ok: false, reason: 'Arquivo inválido. Envie um PDF válido.' };
+            }
+          } else if (mode === 'payment') {
+            const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!allowed.includes(file.type)) return { ok: false, reason: 'Tipo de arquivo inválido. Use apenas PDF ou imagem.' };
+            const signatureMatch = isPdf || isJpeg || isPng || isGif || isWebp;
+            if (!signatureMatch) return { ok: false, reason: 'Arquivo inválido: assinatura binária incompatível.' };
+          } else if (mode === 'employeeDocument') {
+            const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/plain'];
+            if (!allowed.includes(file.type)) return { ok: false, reason: `Tipo de arquivo inválido: ${safeName}. Use PDF, imagem ou TXT.` };
+            if (file.type === 'text/plain') {
+              const txtHeader = await getFileHeader(file, 512);
+              if (txtHeader.some(b => b === 0x00)) return { ok: false, reason: `Arquivo TXT inválido: ${safeName}.` };
+            } else {
+              const signatureMatch = isPdf || isJpeg || isPng || isGif || isWebp;
+              if (!signatureMatch) return { ok: false, reason: `Assinatura inválida para ${safeName}.` };
+            }
+          } else if (mode === 'certificate') {
+            const allowedCertExt = ['.pfx', '.p12', '.cer'];
+            const hasAllowedExt = allowedCertExt.some(ext => lowerName.endsWith(ext));
+            if (!hasAllowedExt) {
+              return { ok: false, reason: 'Certificado inválido. Use arquivos .pfx, .p12 ou .cer.' };
+            }
+          }
+
+          return { ok: true, safeName };
+        };
 
         const formatPhoneMask = (val) => {
           if (!val) return '';
@@ -5467,13 +5533,9 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            if (file.size > 5 * 1024 * 1024) { 
-              showToast(`O arquivo excede o limite de 5MB.`, 'error');
-              e.target.value = '';
-              return;
-            }
-            if (file.type !== 'application/pdf') {
-              showToast(`Apenas arquivos PDF são permitidos para o contrato social.`, 'error');
+            const validation = await validateFileForUpload(file, 'pdf');
+            if (!validation.ok) {
+              showToast(validation.reason, 'error');
               e.target.value = '';
               return;
             }
@@ -5481,13 +5543,13 @@
             try {
               showToast('Enviando contrato social, aguarde...', 'success');
               const fileId = generateId();
-              const fileRef = ref(storage, `companies/${fileId}_${file.name}`);
+              const fileRef = ref(storage, `companies/${fileId}_${validation.safeName}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
               
               setFormData(prev => ({
                 ...prev,
-                socialContractName: file.name,
+                socialContractName: validation.safeName,
                 socialContractUrl: url
               }));
               logAction('Anexo', 'Empresas', `Anexou Contrato Social da empresa ${formData.name || 'Nova Empresa'}`);
@@ -5513,13 +5575,9 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            if (file.size > 5 * 1024 * 1024) { 
-              showToast(`O arquivo excede o limite de 5MB.`, 'error');
-              e.target.value = '';
-              return;
-            }
-            if (file.type !== 'application/pdf') {
-              showToast(`Apenas arquivos PDF são permitidos para o contrato de locação.`, 'error');
+            const validation = await validateFileForUpload(file, 'pdf');
+            if (!validation.ok) {
+              showToast(validation.reason, 'error');
               e.target.value = '';
               return;
             }
@@ -5527,13 +5585,13 @@
             try {
               showToast('Enviando contrato de locação, aguarde...', 'success');
               const fileId = generateId();
-              const fileRef = ref(storage, `commercialRooms/${fileId}_${file.name}`);
+              const fileRef = ref(storage, `commercialRooms/${fileId}_${validation.safeName}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
               
               setRoomFormData(prev => ({
                 ...prev,
-                rentContractName: file.name,
+                rentContractName: validation.safeName,
                 rentContractUrl: url
               }));
               logAction('Anexo', 'Salas Comerciais', `Anexou Contrato de Locação da sala ${roomFormData.localName || 'Nova Sala'}`);
@@ -5556,8 +5614,9 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            if (file.size > 5 * 1024 * 1024) { 
-              showToast(`O arquivo excede o limite de 5MB.`, 'error');
+            const validation = await validateFileForUpload(file, 'certificate');
+            if (!validation.ok) {
+              showToast(validation.reason, 'error');
               e.target.value = '';
               return;
             }
@@ -5565,13 +5624,13 @@
             try {
               showToast('Enviando certificado digital, aguarde...', 'success');
               const fileId = generateId();
-              const fileRef = ref(storage, `certificates/${fileId}_${file.name}`);
+              const fileRef = ref(storage, `certificates/${fileId}_${validation.safeName}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
               
               setFormData(prev => {
                  const newCerts = [...prev.certificates];
-                 newCerts[index].fileName = file.name;
+                 newCerts[index].fileName = validation.safeName;
                  newCerts[index].fileUrl = url;
                  return { ...prev, certificates: newCerts };
               });
@@ -6520,28 +6579,24 @@
             const newDocs = [];
 
             for (const file of files) {
-              const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/plain'];
-              if (!allowedTypes.includes(file.type)) {
-                showToast(`Tipo de arquivo inválido: ${file.name}. Use PDF ou imagens.`, 'error');
-                continue;
-              }
-              if (file.size > 5 * 1024 * 1024) { 
-                showToast(`O arquivo ${file.name} excede o limite de 5MB.`, 'error');
+              const validation = await validateFileForUpload(file, 'employeeDocument');
+              if (!validation.ok) {
+                showToast(validation.reason, 'error');
                 continue;
               }
               try {
                 const fileId = generateId();
-                const fileRef = ref(storage, `documents/${fileId}_${file.name}`);
+                const fileRef = ref(storage, `documents/${fileId}_${validation.safeName}`);
                 await uploadBytes(fileRef, file);
                 const url = await getDownloadURL(fileRef);
                 newDocs.push({
                   id: fileId,
-                  name: file.name,
+                  name: validation.safeName,
                   type: file.type,
                   url: url
                 });
               } catch (err) {
-                showToast(`Erro ao processar ${file.name}`, 'error');
+                showToast(`Erro ao processar ${validation.safeName}`, 'error');
               }
             }
 
@@ -8076,28 +8131,29 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            if (file.size > 5 * 1024 * 1024) { 
-              showToast('O comprovante deve ter no máximo 5MB.', 'error');
+            const validation = await validateFileForUpload(file, 'payment');
+            if (!validation.ok) {
+              showToast(validation.reason, 'error');
               e.target.value = ''; 
               return;
             }
 
             try {
               showToast('Enviando comprovante...', 'success');
-              const fileRef = ref(storage, `receipts/${generateId()}_${file.name}`);
+              const fileRef = ref(storage, `receipts/${generateId()}_${validation.safeName}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
 
               await updateDoc(doc(db, `${basePath}/payments/${payId}`), {
                 receiptUrl: url,
-                receiptName: file.name,
+                receiptName: validation.safeName,
                 isVerified: false,
                 lastModifiedBy: appUser.username
               });
 
               const payObj = payments.find(p => p.id === payId);
               const targetName = payObj?.category !== 'employee' ? payObj.payeeName : employees.find(emp => emp.id === payObj?.employeeId)?.name;
-              logAction('Anexo', 'Pagamentos', `Anexou comprovante no histórico para ${targetName || 'Desconhecido'}: ${file.name}`);
+              logAction('Anexo', 'Pagamentos', `Anexou comprovante no histórico para ${targetName || 'Desconhecido'}: ${validation.safeName}`);
               
               showToast('Comprovante anexado ao histórico com sucesso!');
             } catch (err) {
@@ -8110,24 +8166,19 @@
             const file = e.target.files[0];
             if (!file) return;
             
-            const allowedPayTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            if (!allowedPayTypes.includes(file.type)) {
-              showToast('Tipo de arquivo inválido. Use apenas PDF ou imagem.', 'error');
-              e.target.value = '';
-              return;
-            }
-            if (file.size > 5 * 1024 * 1024) { 
-              showToast('O comprovante deve ter no máximo 5MB.', 'error');
+            const validation = await validateFileForUpload(file, 'payment');
+            if (!validation.ok) {
+              showToast(validation.reason, 'error');
               e.target.value = ''; 
               return;
             }
 
             try {
-              const fileRef = ref(storage, `receipts/${generateId()}_${file.name}`);
+              const fileRef = ref(storage, `receipts/${generateId()}_${validation.safeName}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
-              setPayData({ ...payData, url: url, fileName: file.name });
-              logAction('Anexo', 'Pagamentos', `Anexou comprovante bancário: ${file.name}`);
+              setPayData({ ...payData, url: url, fileName: validation.safeName });
+              logAction('Anexo', 'Pagamentos', `Anexou comprovante bancário: ${validation.safeName}`);
             } catch (err) {
               showToast('Erro ao processar o arquivo no Storage.', 'error');
             }
