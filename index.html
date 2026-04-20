@@ -5112,7 +5112,8 @@
             'Lembrete': { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
             'Feriado': { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-800' },
             'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' },
-            'Escala': { bg: 'bg-sky-100 dark:bg-sky-900/40', text: 'text-sky-700 dark:text-sky-400', border: 'border-sky-200 dark:border-sky-800' }
+            'Escala 1': { bg: 'bg-indigo-100 dark:bg-indigo-900/40', text: 'text-indigo-700 dark:text-indigo-400', border: 'border-indigo-200 dark:border-indigo-800' },
+            'Escala 2': { bg: 'bg-cyan-100 dark:bg-cyan-900/40', text: 'text-cyan-700 dark:text-cyan-400', border: 'border-cyan-200 dark:border-cyan-800' }
           };
 
           const TIME_OPTIONS = [
@@ -5223,7 +5224,7 @@
                   date: formatStr(y, m + 1, d),
                   title: `Escala ${scaleNum}`,
                   time: '',
-                  type: 'Escala',
+                  type: `Escala ${scaleNum}`,
                   description: `Marcação automática de Escala ${scaleNum} de Sábado.`,
                   isHolidayItem: true
                 });
