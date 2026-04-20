@@ -5111,7 +5111,8 @@
             'Reunião': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' },
             'Lembrete': { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
             'Feriado': { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-800' },
-            'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' }
+            'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' },
+            'Escala': { bg: 'bg-sky-100 dark:bg-sky-900/40', text: 'text-sky-700 dark:text-sky-400', border: 'border-sky-200 dark:border-sky-800' }
           };
 
           const TIME_OPTIONS = [
@@ -5205,7 +5206,33 @@
             return holidays;
           };
 
-          const monthHolidays = getHolidays(year, month);
+          const getScaleEvents = (y, m) => {
+            const scales = [];
+            const anchorDate = new Date(2026, 2, 7); // 07/03/2026 é Escala 1
+            const daysInM = new Date(y, m + 1, 0).getDate();
+            
+            for (let d = 1; d <= daysInM; d++) {
+              const dateObj = new Date(y, m, d);
+              if (dateObj.getDay() === 6) { // Sábado
+                const msPerWeek = 1000 * 60 * 60 * 24 * 7;
+                const weeksDiff = Math.round((dateObj.getTime() - anchorDate.getTime()) / msPerWeek);
+                const scaleNum = (Math.abs(weeksDiff) % 2 === 0) ? 1 : 2;
+                
+                scales.push({
+                  id: `sys-scale-${d}-${m+1}-${y}`,
+                  date: formatStr(y, m + 1, d),
+                  title: `Escala ${scaleNum}`,
+                  time: '',
+                  type: 'Escala',
+                  description: `Marcação automática de Escala ${scaleNum} de Sábado.`,
+                  isHolidayItem: true
+                });
+              }
+            }
+            return scales;
+          };
+
+          const monthHolidays = [...getHolidays(year, month), ...getScaleEvents(year, month)];
           // ----------------------------------------------
 
           const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
