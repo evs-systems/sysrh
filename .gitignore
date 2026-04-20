@@ -2,3 +2,5 @@ security_audit_report.html
 .vscode/
 node_modules/
 *.log
+firestore.rules
+storage.rules
