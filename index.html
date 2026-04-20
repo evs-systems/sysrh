@@ -553,7 +553,7 @@
 
           return (
             <div ref={selectRef} className={`flex flex-col gap-1 relative ${className}`}>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">{label}</label>
+              {label && <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">{label}</label>}
 
               <div className="relative w-full">
                 {/* Select nativo escondido atrás do botão, mas com o tamanho real para ancorar o balão de aviso perfeitamente */}
@@ -7549,6 +7549,7 @@
           const [scheduledYearFilter, setScheduledYearFilter] = useState(currentYearVal);
           
           const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+          const [bulkCompanyFilter, setBulkCompanyFilter] = useState('');
           
           const [formData, setFormData] = useState({
             category: 'employee',
@@ -8288,7 +8289,12 @@
 
           const activeEmployeeToPay = paymentToProcess?.category === 'employee' && paymentToProcess ? employees.find(e => e.id === paymentToProcess.employeeId) : null;
 
-          const activeEmpsForBulk = employees.filter(e => e.status !== 'Desligado' && (e.name.toLowerCase().includes(bulkSearchTerm.toLowerCase()) || (e.cpf && e.cpf.includes(bulkSearchTerm))));
+          const activeEmpsForBulk = employees.filter(e => {
+            const matchStatus = e.status !== 'Desligado';
+            const matchSearch = e.name.toLowerCase().includes(bulkSearchTerm.toLowerCase()) || (e.cpf && e.cpf.includes(bulkSearchTerm));
+            const matchCompany = bulkCompanyFilter ? e.company === bulkCompanyFilter : true;
+            return matchStatus && matchSearch && matchCompany;
+          });
 
           return (
             <div className="space-y-6 animate-in fade-in duration-500 no-print">
@@ -8757,15 +8763,30 @@
                       <label className="text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                         Selecionar Colaboradores ({bulkFormData.employeeIds.length})
                       </label>
-                      <div className="relative w-full sm:w-48">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-                        <input 
-                          type="text" 
-                          placeholder="Buscar funcionário..." 
-                          className={`w-full pl-8 pr-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2`}
-                          value={bulkSearchTerm}
-                          onChange={e => setBulkSearchTerm(e.target.value)}
+                      <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-end">
+                        <Select 
+                          label="Filtrar Empresa"
+                          theme={theme} 
+                          value={bulkCompanyFilter} 
+                          onChange={e => setBulkCompanyFilter(e.target.value)} 
+                          options={[{value: '', label: 'Todas'}, ...[...new Set(employees.map(e => e.company).filter(Boolean))].sort().map(c => ({ value: c, label: c }))]}
+                          className="w-full sm:w-48"
                         />
+                        <div className="flex flex-col gap-1 w-full sm:w-48">
+                          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Buscar</label>
+                          <div className="relative">
+                            <input 
+                              type="text" 
+                              placeholder="Nome ou CPF..." 
+                              className={`w-full pl-8 pr-3 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white backdrop-blur-sm shadow-sm`}
+                              value={bulkSearchTerm}
+                              onChange={e => setBulkSearchTerm(e.target.value)}
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <Search className="text-slate-400" size={14} />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     
