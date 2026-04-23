@@ -694,6 +694,13 @@
           );
         };
 
+        const toJsDate = (value) => {
+          if (!value) return null;
+          if (value?.toDate && typeof value.toDate === 'function') return value.toDate();
+          const d = new Date(value);
+          return isNaN(d.getTime()) ? null : d;
+        };
+
         // --- MAIN APPLICATION COMPONENT ---
         function App() {
           const [user, setUser] = useState(null);
