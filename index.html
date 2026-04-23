@@ -10200,10 +10200,11 @@
             setVisibleCount(50);
           }, [filterType, filterDay, filterMonth, filterYear, filterAction, searchTerm]);
 
-          const getPartsFromISO = (iso) => {
-            if (!iso) return null;
-            const d = new Date(iso);
-            if (isNaN(d.getTime())) return null;
+          const getPartsFromISO = (value) => {
+            if (!value) return null;
+            // Tenta converter usando a função toJsDate que já existe no seu arquivo e é segura
+            const d = toJsDate(value);
+            if (!d || isNaN(d.getTime())) return null;
             return {
               d: String(d.getDate()).padStart(2, '0'),
               m: String(d.getMonth() + 1).padStart(2, '0'),
