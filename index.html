@@ -1734,7 +1734,17 @@
           const showComp = checkAccess('companies'); // Permissão para ver certificados
           const showCal = checkAccess('calendar'); // Permissão para ver agenda
 
-          const activeEmployees = employees.filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer');
+          const activeEmployees = employees
+            .filter(e => e.status !== 'Desligado' && e.employeeType !== 'Freelancer')
+            .sort((a, b) => {
+              const parseDate = (d) => {
+                if (!d || typeof d !== 'string') return 0;
+                const parts = d.split('/');
+                if (parts.length !== 3) return 0;
+                return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+              };
+              return parseDate(b.startDate) - parseDate(a.startDate);
+            });
 
           const todayDateObj = new Date();
           const currentDayStr = String(todayDateObj.getDate()).padStart(2, '0');
