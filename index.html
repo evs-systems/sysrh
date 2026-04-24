@@ -5038,7 +5038,7 @@
             'Feriado': { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-800' },
             'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' },
             'Escala1': { bg: 'bg-slate-100 dark:bg-slate-900/40', text: 'text-slate-600 dark:text-slate-400', border: 'border-slate-200 dark:border-slate-800' },
-            'Escala2': { bg: 'bg-sky-100 dark:bg-sky-900/40', text: 'text-sky-600 dark:text-sky-400', border: 'border-sky-200 dark:border-sky-800' }
+            'Escala2': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' }
           };
 
           const TIME_OPTIONS = [
@@ -5247,7 +5247,7 @@
                         const shiftNum = (weekNum % 2 === 0) ? 2 : 1;
                         dayEvents.unshift({
                           id: `shift-sat-${dateStr}`,
-                          title: `Sábado ${shiftNum}`,
+                          title: `Escala ${shiftNum}`,
                           type: shiftNum === 1 ? 'Escala1' : 'Escala2',
                           isShift: true
                         });
