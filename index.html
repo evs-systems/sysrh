@@ -5244,7 +5244,7 @@
                       const isSaturday = dateObj.getDay() === 6;
                       if (isSaturday) {
                         const weekNum = getWeekNumber(dateObj);
-                        const shiftNum = (weekNum % 2 === 0) ? 2 : 1;
+                        const shiftNum = (weekNum % 2 === 0) ? 1 : 2;
                         dayEvents.unshift({
                           id: `shift-sat-${dateStr}`,
                           title: `Escala ${shiftNum}`,
