@@ -255,11 +255,7 @@
         import { initializeApp } from 'firebase/app';
         import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from 'firebase/auth';
-        import { 
-          getFirestore, collection, doc, setDoc as fsSetDoc, getDoc, onSnapshot, 
-          addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc, serverTimestamp,
-          query, where, orderBy, limit 
-        } from 'firebase/firestore';
+        import { getFirestore, collection, doc, setDoc as fsSetDoc, getDoc, onSnapshot, addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
         const addDoc = (ref, data) => fsAddDoc(ref, { ...data, updatedAt: serverTimestamp() });
@@ -291,6 +287,7 @@
         
         // Configuração do caminho do banco de dados
         const basePath = '';
+
         // --- THEME CONFIGURATION ---
         const THEMES = {
           blue: { main: 'blue', bg: 'bg-blue-600', hover: 'hover:bg-blue-700', text: 'text-blue-600', darkText: 'dark:text-blue-400', border: 'border-blue-500', ring: 'focus:ring-blue-500', lightBg: 'bg-blue-50 dark:bg-blue-900/20' },
@@ -311,73 +308,6 @@
         };
         const formatCPF = (cpf) => cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") || '';
         const generateId = () => Math.random().toString(36).substr(2, 9);
-        const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
-
-        const sanitizeFileName = (name) => {
-          const normalized = String(name || '')
-            .replace(/[\/\\:*?"<>|]/g, '_')
-            .replace(/\s+/g, ' ')
-            .trim();
-          return normalized.slice(0, 120) || `arquivo_${Date.now()}`;
-        };
-
-        const getFileHeader = async (file, bytes = 16) => {
-          const buffer = await file.slice(0, bytes).arrayBuffer();
-          return new Uint8Array(buffer);
-        };
-
-        const hasSignature = (header, sig) => sig.every((v, i) => header[i] === v);
-
-        const hasWebPSignature = (header) => {
-          const riff = [0x52, 0x49, 0x46, 0x46];
-          const webp = [0x57, 0x45, 0x42, 0x50];
-          return hasSignature(header, riff) &&
-            header[8] === webp[0] && header[9] === webp[1] && header[10] === webp[2] && header[11] === webp[3];
-        };
-
-        const validateFileForUpload = async (file, mode) => {
-          if (!file) return { ok: false, reason: 'Arquivo inválido.' };
-          if (file.size > MAX_UPLOAD_SIZE) return { ok: false, reason: 'O arquivo excede o limite de 5MB.' };
-
-          const safeName = sanitizeFileName(file.name);
-          const lowerName = safeName.toLowerCase();
-          const header = await getFileHeader(file, 12);
-
-          const isPdf = hasSignature(header, [0x25, 0x50, 0x44, 0x46]); // %PDF
-          const isJpeg = hasSignature(header, [0xFF, 0xD8, 0xFF]);
-          const isPng = hasSignature(header, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-          const isGif = hasSignature(header, [0x47, 0x49, 0x46, 0x38]);
-          const isWebp = hasWebPSignature(header);
-
-          if (mode === 'pdf') {
-            if (file.type !== 'application/pdf' || !isPdf) {
-              return { ok: false, reason: 'Arquivo inválido. Envie um PDF válido.' };
-            }
-          } else if (mode === 'payment') {
-            const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            if (!allowed.includes(file.type)) return { ok: false, reason: 'Tipo de arquivo inválido. Use apenas PDF ou imagem.' };
-            const signatureMatch = isPdf || isJpeg || isPng || isGif || isWebp;
-            if (!signatureMatch) return { ok: false, reason: 'Arquivo inválido: assinatura binária incompatível.' };
-          } else if (mode === 'employeeDocument') {
-            const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/plain'];
-            if (!allowed.includes(file.type)) return { ok: false, reason: `Tipo de arquivo inválido: ${safeName}. Use PDF, imagem ou TXT.` };
-            if (file.type === 'text/plain') {
-              const txtHeader = await getFileHeader(file, 512);
-              if (txtHeader.some(b => b === 0x00)) return { ok: false, reason: `Arquivo TXT inválido: ${safeName}.` };
-            } else {
-              const signatureMatch = isPdf || isJpeg || isPng || isGif || isWebp;
-              if (!signatureMatch) return { ok: false, reason: `Assinatura inválida para ${safeName}.` };
-            }
-          } else if (mode === 'certificate') {
-            const allowedCertExt = ['.pfx', '.p12', '.cer'];
-            const hasAllowedExt = allowedCertExt.some(ext => lowerName.endsWith(ext));
-            if (!hasAllowedExt) {
-              return { ok: false, reason: 'Certificado inválido. Use arquivos .pfx, .p12 ou .cer.' };
-            }
-          }
-
-          return { ok: true, safeName };
-        };
 
         const formatPhoneMask = (val) => {
           if (!val) return '';
@@ -553,7 +483,7 @@
 
           return (
             <div ref={selectRef} className={`flex flex-col gap-1 relative ${className}`}>
-              {label && <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">{label}</label>}
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">{label}</label>
 
               <div className="relative w-full">
                 {/* Select nativo escondido atrás do botão, mas com o tamanho real para ancorar o balão de aviso perfeitamente */}
@@ -860,39 +790,39 @@
               }
             };
 
-            const unsubSystemUsers = onSnapshot(query(collection(db, `${basePath}/systemUsers`), orderBy('name', 'asc')), 
+            const unsubSystemUsers = onSnapshot(collection(db, `${basePath}/systemUsers`), 
               (snapshot) => { setSystemUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubCompanies = onSnapshot(query(collection(db, `${basePath}/companies`), orderBy('name', 'asc')), 
+            const unsubCompanies = onSnapshot(collection(db, `${basePath}/companies`), 
               (snapshot) => { setCompanies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubCommercialRooms = onSnapshot(query(collection(db, `${basePath}/commercialRooms`), orderBy('name', 'asc')), 
+            const unsubCommercialRooms = onSnapshot(collection(db, `${basePath}/commercialRooms`), 
               (snapshot) => { setCommercialRooms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubEmployees = onSnapshot(query(collection(db, `${basePath}/employees`), orderBy('name', 'asc')), 
+            const unsubEmployees = onSnapshot(collection(db, `${basePath}/employees`), 
               (snapshot) => { setEmployees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubPayments = onSnapshot(query(collection(db, `${basePath}/payments`), orderBy('updatedAt', 'desc')), 
+            const unsubPayments = onSnapshot(collection(db, `${basePath}/payments`), 
               (snapshot) => { setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubRequests = onSnapshot(query(collection(db, `${basePath}/requests`), orderBy('updatedAt', 'desc')), 
+            const unsubRequests = onSnapshot(collection(db, `${basePath}/requests`), 
               (snapshot) => { setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubOccurrences = onSnapshot(query(collection(db, `${basePath}/occurrences`), orderBy('updatedAt', 'desc')), 
+            const unsubOccurrences = onSnapshot(collection(db, `${basePath}/occurrences`), 
               (snapshot) => { setOccurrences(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubEvents = onSnapshot(query(collection(db, `${basePath}/events`), orderBy('date', 'asc')), 
+            const unsubEvents = onSnapshot(collection(db, `${basePath}/events`), 
               (snapshot) => { setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubLogs = onSnapshot(query(collection(db, `${basePath}/logs`), orderBy('timestamp', 'desc'), limit(100)), 
+            const unsubLogs = onSnapshot(collection(db, `${basePath}/logs`), 
               (snapshot) => { setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
@@ -977,8 +907,7 @@
             if (!u) return;
             try {
               await addDoc(collection(db, `${basePath}/logs`), {
-                timestamp: serverTimestamp(),
-                userId: auth.currentUser?.uid || u.id,
+                timestamp: new Date().toISOString(),
                 userName: u.name || 'Desconhecido',
                 userUsername: u.username || 'admin',
                 action,
@@ -2205,7 +2134,7 @@
                             <span className="font-medium truncate">{emp.name}</span>
                             <span className="text-xs text-slate-500 truncate">{emp.role}</span>
                           </div>
-                          <span className="text-xs px-2.5 py-1 rounded-md bg-slate-200 dark:bg-slate-700 flex-shrink-0">{emp.workSector}</span>
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0">{emp.department}</span>
                         </div>
                       ))}
                       {activeEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum funcionário ativo.</p>}
@@ -2289,7 +2218,7 @@
                                   {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Fim em ${emp._diffDays} ${diasText}`}
                                 </span>
                               ) : (
-                                <span className="text-[10px] px-2 py-1 rounded-md font-medium bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex-shrink-0">
+                                <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
                                   Em andamento
                                 </span>
                               )
@@ -4061,15 +3990,9 @@
           const [filterYear, setFilterYear] = useState(String(todayDate.getFullYear()));
           const [activeDetailTab, setActiveDetailTab] = useState('payments');
 
-          const toJsDate = (value) => {
-            if (!value) return null;
-            if (value?.toDate && typeof value.toDate === 'function') return value.toDate();
-            const d = new Date(value);
-            return isNaN(d.getTime()) ? null : d;
-          };
-
-          const getPartsFromISO = (value) => {
-            const d = toJsDate(value);
+          const getPartsFromISO = (iso) => {
+            if (!iso) return null;
+            const d = new Date(iso);
             if (isNaN(d.getTime())) return null;
             return {
               d: String(d.getDate()).padStart(2, '0'),
@@ -5111,9 +5034,7 @@
             'Reunião': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' },
             'Lembrete': { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
             'Feriado': { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-800' },
-            'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' },
-            'Escala 1': { bg: 'bg-indigo-100 dark:bg-indigo-900/40', text: 'text-indigo-700 dark:text-indigo-400', border: 'border-indigo-200 dark:border-indigo-800' },
-            'Escala 2': { bg: 'bg-cyan-100 dark:bg-cyan-900/40', text: 'text-cyan-700 dark:text-cyan-400', border: 'border-cyan-200 dark:border-cyan-800' }
+            'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' }
           };
 
           const TIME_OPTIONS = [
@@ -5207,33 +5128,7 @@
             return holidays;
           };
 
-          const getScaleEvents = (y, m) => {
-            const scales = [];
-            const anchorDate = new Date(2026, 2, 7); // 07/03/2026 é Escala 1
-            const daysInM = new Date(y, m + 1, 0).getDate();
-            
-            for (let d = 1; d <= daysInM; d++) {
-              const dateObj = new Date(y, m, d);
-              if (dateObj.getDay() === 6) { // Sábado
-                const msPerWeek = 1000 * 60 * 60 * 24 * 7;
-                const weeksDiff = Math.round((dateObj.getTime() - anchorDate.getTime()) / msPerWeek);
-                const scaleNum = (Math.abs(weeksDiff) % 2 === 0) ? 1 : 2;
-                
-                scales.push({
-                  id: `sys-scale-${d}-${m+1}-${y}`,
-                  date: formatStr(y, m + 1, d),
-                  title: `Escala ${scaleNum}`,
-                  time: '',
-                  type: `Escala ${scaleNum}`,
-                  description: `Marcação automática de Escala ${scaleNum} de Sábado.`,
-                  isHolidayItem: true
-                });
-              }
-            }
-            return scales;
-          };
-
-          const monthHolidays = [...getHolidays(year, month), ...getScaleEvents(year, month)];
+          const monthHolidays = getHolidays(year, month);
           // ----------------------------------------------
 
           const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
@@ -5565,9 +5460,13 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            const validation = await validateFileForUpload(file, 'pdf');
-            if (!validation.ok) {
-              showToast(validation.reason, 'error');
+            if (file.size > 5 * 1024 * 1024) { 
+              showToast(`O arquivo excede o limite de 5MB.`, 'error');
+              e.target.value = '';
+              return;
+            }
+            if (file.type !== 'application/pdf') {
+              showToast(`Apenas arquivos PDF são permitidos para o contrato social.`, 'error');
               e.target.value = '';
               return;
             }
@@ -5575,13 +5474,13 @@
             try {
               showToast('Enviando contrato social, aguarde...', 'success');
               const fileId = generateId();
-              const fileRef = ref(storage, `companies/${fileId}_${validation.safeName}`);
+              const fileRef = ref(storage, `companies/${fileId}_${file.name}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
               
               setFormData(prev => ({
                 ...prev,
-                socialContractName: validation.safeName,
+                socialContractName: file.name,
                 socialContractUrl: url
               }));
               logAction('Anexo', 'Empresas', `Anexou Contrato Social da empresa ${formData.name || 'Nova Empresa'}`);
@@ -5607,9 +5506,13 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            const validation = await validateFileForUpload(file, 'pdf');
-            if (!validation.ok) {
-              showToast(validation.reason, 'error');
+            if (file.size > 5 * 1024 * 1024) { 
+              showToast(`O arquivo excede o limite de 5MB.`, 'error');
+              e.target.value = '';
+              return;
+            }
+            if (file.type !== 'application/pdf') {
+              showToast(`Apenas arquivos PDF são permitidos para o contrato de locação.`, 'error');
               e.target.value = '';
               return;
             }
@@ -5617,13 +5520,13 @@
             try {
               showToast('Enviando contrato de locação, aguarde...', 'success');
               const fileId = generateId();
-              const fileRef = ref(storage, `commercialRooms/${fileId}_${validation.safeName}`);
+              const fileRef = ref(storage, `commercialRooms/${fileId}_${file.name}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
               
               setRoomFormData(prev => ({
                 ...prev,
-                rentContractName: validation.safeName,
+                rentContractName: file.name,
                 rentContractUrl: url
               }));
               logAction('Anexo', 'Salas Comerciais', `Anexou Contrato de Locação da sala ${roomFormData.localName || 'Nova Sala'}`);
@@ -5646,9 +5549,8 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            const validation = await validateFileForUpload(file, 'certificate');
-            if (!validation.ok) {
-              showToast(validation.reason, 'error');
+            if (file.size > 5 * 1024 * 1024) { 
+              showToast(`O arquivo excede o limite de 5MB.`, 'error');
               e.target.value = '';
               return;
             }
@@ -5656,13 +5558,13 @@
             try {
               showToast('Enviando certificado digital, aguarde...', 'success');
               const fileId = generateId();
-              const fileRef = ref(storage, `certificates/${fileId}_${validation.safeName}`);
+              const fileRef = ref(storage, `certificates/${fileId}_${file.name}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
               
               setFormData(prev => {
                  const newCerts = [...prev.certificates];
-                 newCerts[index].fileName = validation.safeName;
+                 newCerts[index].fileName = file.name;
                  newCerts[index].fileUrl = url;
                  return { ...prev, certificates: newCerts };
               });
@@ -6611,24 +6513,28 @@
             const newDocs = [];
 
             for (const file of files) {
-              const validation = await validateFileForUpload(file, 'employeeDocument');
-              if (!validation.ok) {
-                showToast(validation.reason, 'error');
+              const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/plain'];
+              if (!allowedTypes.includes(file.type)) {
+                showToast(`Tipo de arquivo inválido: ${file.name}. Use PDF ou imagens.`, 'error');
+                continue;
+              }
+              if (file.size > 5 * 1024 * 1024) { 
+                showToast(`O arquivo ${file.name} excede o limite de 5MB.`, 'error');
                 continue;
               }
               try {
                 const fileId = generateId();
-                const fileRef = ref(storage, `documents/${fileId}_${validation.safeName}`);
+                const fileRef = ref(storage, `documents/${fileId}_${file.name}`);
                 await uploadBytes(fileRef, file);
                 const url = await getDownloadURL(fileRef);
                 newDocs.push({
                   id: fileId,
-                  name: validation.safeName,
+                  name: file.name,
                   type: file.type,
                   url: url
                 });
               } catch (err) {
-                showToast(`Erro ao processar ${validation.safeName}`, 'error');
+                showToast(`Erro ao processar ${file.name}`, 'error');
               }
             }
 
@@ -7549,7 +7455,6 @@
           const [scheduledYearFilter, setScheduledYearFilter] = useState(currentYearVal);
           
           const [bulkSearchTerm, setBulkSearchTerm] = useState('');
-          const [bulkCompanyFilter, setBulkCompanyFilter] = useState('');
           
           const [formData, setFormData] = useState({
             category: 'employee',
@@ -8164,29 +8069,28 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            const validation = await validateFileForUpload(file, 'payment');
-            if (!validation.ok) {
-              showToast(validation.reason, 'error');
+            if (file.size > 5 * 1024 * 1024) { 
+              showToast('O comprovante deve ter no máximo 5MB.', 'error');
               e.target.value = ''; 
               return;
             }
 
             try {
               showToast('Enviando comprovante...', 'success');
-              const fileRef = ref(storage, `receipts/${generateId()}_${validation.safeName}`);
+              const fileRef = ref(storage, `receipts/${generateId()}_${file.name}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
 
               await updateDoc(doc(db, `${basePath}/payments/${payId}`), {
                 receiptUrl: url,
-                receiptName: validation.safeName,
+                receiptName: file.name,
                 isVerified: false,
                 lastModifiedBy: appUser.username
               });
 
               const payObj = payments.find(p => p.id === payId);
               const targetName = payObj?.category !== 'employee' ? payObj.payeeName : employees.find(emp => emp.id === payObj?.employeeId)?.name;
-              logAction('Anexo', 'Pagamentos', `Anexou comprovante no histórico para ${targetName || 'Desconhecido'}: ${validation.safeName}`);
+              logAction('Anexo', 'Pagamentos', `Anexou comprovante no histórico para ${targetName || 'Desconhecido'}: ${file.name}`);
               
               showToast('Comprovante anexado ao histórico com sucesso!');
             } catch (err) {
@@ -8199,19 +8103,24 @@
             const file = e.target.files[0];
             if (!file) return;
             
-            const validation = await validateFileForUpload(file, 'payment');
-            if (!validation.ok) {
-              showToast(validation.reason, 'error');
+            const allowedPayTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!allowedPayTypes.includes(file.type)) {
+              showToast('Tipo de arquivo inválido. Use apenas PDF ou imagem.', 'error');
+              e.target.value = '';
+              return;
+            }
+            if (file.size > 5 * 1024 * 1024) { 
+              showToast('O comprovante deve ter no máximo 5MB.', 'error');
               e.target.value = ''; 
               return;
             }
 
             try {
-              const fileRef = ref(storage, `receipts/${generateId()}_${validation.safeName}`);
+              const fileRef = ref(storage, `receipts/${generateId()}_${file.name}`);
               await uploadBytes(fileRef, file);
               const url = await getDownloadURL(fileRef);
-              setPayData({ ...payData, url: url, fileName: validation.safeName });
-              logAction('Anexo', 'Pagamentos', `Anexou comprovante bancário: ${validation.safeName}`);
+              setPayData({ ...payData, url: url, fileName: file.name });
+              logAction('Anexo', 'Pagamentos', `Anexou comprovante bancário: ${file.name}`);
             } catch (err) {
               showToast('Erro ao processar o arquivo no Storage.', 'error');
             }
@@ -8289,12 +8198,7 @@
 
           const activeEmployeeToPay = paymentToProcess?.category === 'employee' && paymentToProcess ? employees.find(e => e.id === paymentToProcess.employeeId) : null;
 
-          const activeEmpsForBulk = employees.filter(e => {
-            const matchStatus = e.status !== 'Desligado';
-            const matchSearch = e.name.toLowerCase().includes(bulkSearchTerm.toLowerCase()) || (e.cpf && e.cpf.includes(bulkSearchTerm));
-            const matchCompany = bulkCompanyFilter ? e.company === bulkCompanyFilter : true;
-            return matchStatus && matchSearch && matchCompany;
-          });
+          const activeEmpsForBulk = employees.filter(e => e.status !== 'Desligado' && (e.name.toLowerCase().includes(bulkSearchTerm.toLowerCase()) || (e.cpf && e.cpf.includes(bulkSearchTerm))));
 
           return (
             <div className="space-y-6 animate-in fade-in duration-500 no-print">
@@ -8763,30 +8667,15 @@
                       <label className="text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                         Selecionar Colaboradores ({bulkFormData.employeeIds.length})
                       </label>
-                      <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-end">
-                        <Select 
-                          label="Filtrar Empresa"
-                          theme={theme} 
-                          value={bulkCompanyFilter} 
-                          onChange={e => setBulkCompanyFilter(e.target.value)} 
-                          options={[{value: '', label: 'Todas'}, ...[...new Set(employees.map(e => e.company).filter(Boolean))].sort().map(c => ({ value: c, label: c }))]}
-                          className="w-full sm:w-48"
+                      <div className="relative w-full sm:w-48">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                        <input 
+                          type="text" 
+                          placeholder="Buscar funcionário..." 
+                          className={`w-full pl-8 pr-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2`}
+                          value={bulkSearchTerm}
+                          onChange={e => setBulkSearchTerm(e.target.value)}
                         />
-                        <div className="flex flex-col gap-1 w-full sm:w-48">
-                          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Buscar</label>
-                          <div className="relative">
-                            <input 
-                              type="text" 
-                              placeholder="Nome ou CPF..." 
-                              className={`w-full pl-8 pr-3 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 focus:border-transparent text-slate-900 dark:text-white backdrop-blur-sm shadow-sm`}
-                              value={bulkSearchTerm}
-                              onChange={e => setBulkSearchTerm(e.target.value)}
-                            />
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                              <Search className="text-slate-400" size={14} />
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     </div>
                     
@@ -10257,17 +10146,12 @@
                
                return matchDate && matchAction && matchSearch;
             })
-            .sort((a, b) => {
-              const dateA = toJsDate(a.timestamp);
-              const dateB = toJsDate(b.timestamp);
-              return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
-            });
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
           const displayedLogs = filteredLogs.slice(0, visibleCount);
 
-          const formatLogTime = (value) => {
-            const d = toJsDate(value);
-            if (!d) return '-';
+          const formatLogTime = (isoString) => {
+            const d = new Date(isoString);
             return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
           };
 
