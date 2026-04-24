@@ -5037,8 +5037,8 @@
             'Lembrete': { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
             'Feriado': { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-800' },
             'Especial': { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800' },
-            'Escala1': { bg: 'bg-purple-600', text: 'text-white', border: 'border-purple-700' },
-            'Escala2': { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-700' }
+            'Escala1': { bg: 'bg-slate-100 dark:bg-slate-900/40', text: 'text-slate-600 dark:text-slate-400', border: 'border-slate-200 dark:border-slate-800' },
+            'Escala2': { bg: 'bg-sky-100 dark:bg-sky-900/40', text: 'text-sky-600 dark:text-sky-400', border: 'border-sky-200 dark:border-sky-800' }
           };
 
           const TIME_OPTIONS = [
@@ -5268,7 +5268,7 @@
                           </div>
                           <div className="flex-1 flex flex-col gap-0.5 sm:gap-1 overflow-hidden min-w-0 w-full">
                             {dayEvents.slice(0, 3).map(ev => (
-                              <div key={ev.id} className={`w-full text-[9px] sm:text-[10px] md:text-xs px-1 sm:px-1.5 py-0.5 rounded-md truncate ${ev.isShift ? 'font-bold' : 'font-medium'} border ${EVENT_TYPES[ev.type]?.bg} ${EVENT_TYPES[ev.type]?.text} ${EVENT_TYPES[ev.type]?.border}`} title={ev.title}>
+                              <div key={ev.id} className={`w-full text-[9px] sm:text-[10px] md:text-xs px-1 sm:px-1.5 py-0.5 rounded truncate font-medium border ${EVENT_TYPES[ev.type]?.bg} ${EVENT_TYPES[ev.type]?.text} ${EVENT_TYPES[ev.type]?.border}`} title={ev.title}>
                                 {ev.time && <span className="hidden sm:inline mr-1 opacity-70">{ev.time}</span>}{ev.title}
                               </div>
                             ))}
