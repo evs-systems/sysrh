@@ -5202,7 +5202,31 @@
           // Mescla Feriados do Sistema com Eventos do Banco de Dados
           const selectedSysHols = selectedDateStr ? monthHolidays.filter(h => h.date === selectedDateStr) : [];
           const selectedDbEvents = selectedDateStr ? events.filter(e => e.date === selectedDateStr) : [];
-          const selectedDayEvents = [...selectedSysHols, ...selectedDbEvents].sort((a,b) => {
+          
+          // Lógica de Escala para o dia selecionado
+          let selectedShift = [];
+          if (selectedDateStr) {
+            const [y, m, d] = selectedDateStr.split('-').map(Number);
+            const dateObj = new Date(y, m - 1, d);
+            if (dateObj.getDay() === 6) {
+              const anchorSat = new Date(2026, 2, 7);
+              anchorSat.setHours(0,0,0,0);
+              const diffTime = dateObj.getTime() - anchorSat.getTime();
+              const weeksDiff = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
+              const shiftNum = (Math.abs(weeksDiff) % 2 === 0) ? 1 : 2;
+              selectedShift.push({
+                id: `shift-sat-${selectedDateStr}`,
+                title: `Escala ${shiftNum}`,
+                type: shiftNum === 1 ? 'Escala1' : 'Escala2',
+                isShiftItem: true,
+                description: 'Escala de trabalho automática do sistema.'
+              });
+            }
+          }
+
+          const selectedDayEvents = [...selectedShift, ...selectedSysHols, ...selectedDbEvents].sort((a,b) => {
+             if (a.isShiftItem && !b.isShiftItem) return -1;
+             if (!a.isShiftItem && b.isShiftItem) return 1;
              if (a.isHolidayItem && !b.isHolidayItem) return -1;
              if (!a.isHolidayItem && b.isHolidayItem) return 1;
              return (a.time || '').localeCompare(b.time || '');
