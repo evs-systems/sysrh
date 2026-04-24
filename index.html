@@ -5239,12 +5239,16 @@
                          return (a.time || '').localeCompare(b.time || '');
                       });
 
-                      // Lógica de Escala de Sábado
+                      // Lógica de Escala de Sábado (Âncora: 07/03/2026 = Escala 1)
                       const dateObj = new Date(year, month, d);
                       const isSaturday = dateObj.getDay() === 6;
                       if (isSaturday) {
-                        const weekNum = getWeekNumber(dateObj);
-                        const shiftNum = (weekNum % 2 === 0) ? 1 : 2;
+                        const anchorSat = new Date(2026, 2, 7);
+                        anchorSat.setHours(0,0,0,0);
+                        const diffTime = dateObj.getTime() - anchorSat.getTime();
+                        const weeksDiff = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
+                        const shiftNum = (Math.abs(weeksDiff) % 2 === 0) ? 1 : 2;
+                        
                         dayEvents.unshift({
                           id: `shift-sat-${dateStr}`,
                           title: `Escala ${shiftNum}`,
