@@ -2134,7 +2134,9 @@
                             <span className="font-medium truncate">{emp.name}</span>
                             <span className="text-xs text-slate-500 truncate">{emp.role}</span>
                           </div>
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0">{emp.department}</span>
+                          <span className={`text-[10px] px-2 py-1 rounded-md font-bold text-white flex-shrink-0 ${theme.bg}`}>
+                            {emp.department}
+                          </span>
                         </div>
                       ))}
                       {activeEmployees.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhum funcionário ativo.</p>}
@@ -2218,7 +2220,7 @@
                                   {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : `Fim em ${emp._diffDays} ${diasText}`}
                                 </span>
                               ) : (
-                                <span className="text-[10px] px-2 py-1 rounded-md font-medium text-slate-500 bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                                <span className={`text-[10px] px-2 py-1 rounded-md font-bold text-white flex-shrink-0 ${theme.bg}`}>
                                   Em andamento
                                 </span>
                               )
@@ -7455,6 +7457,7 @@
           const [scheduledYearFilter, setScheduledYearFilter] = useState(currentYearVal);
           
           const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+          const [bulkCompanyFilter, setBulkCompanyFilter] = useState('');
           
           const [formData, setFormData] = useState({
             category: 'employee',
@@ -7943,6 +7946,7 @@
               setIsBulkModalOpen(false);
               setBulkFormData({ employeeIds: [], employeeAmounts: {}, date: '', type: 'Salário', description: '', mandatoryCompanyAccount: 'Sim', isRecurring: 'Não' });
               setBulkSearchTerm('');
+              setBulkCompanyFilter('');
             } catch (err) {
               showToast('Erro ao programar pagamentos em massa.', 'error');
             } finally {
@@ -8198,7 +8202,12 @@
 
           const activeEmployeeToPay = paymentToProcess?.category === 'employee' && paymentToProcess ? employees.find(e => e.id === paymentToProcess.employeeId) : null;
 
-          const activeEmpsForBulk = employees.filter(e => e.status !== 'Desligado' && (e.name.toLowerCase().includes(bulkSearchTerm.toLowerCase()) || (e.cpf && e.cpf.includes(bulkSearchTerm))));
+          const activeEmpsForBulk = employees.filter(e => {
+            const statusMatch = e.status !== 'Desligado';
+            const searchMatch = e.name.toLowerCase().includes(bulkSearchTerm.toLowerCase()) || (e.cpf && e.cpf.includes(bulkSearchTerm));
+            const companyMatch = bulkCompanyFilter ? e.company === bulkCompanyFilter : true;
+            return statusMatch && searchMatch && companyMatch;
+          });
 
           return (
             <div className="space-y-6 animate-in fade-in duration-500 no-print">
@@ -8663,19 +8672,33 @@
                   </div>
 
                   <div className="space-y-2 pt-2">
-                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-                      <label className="text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
+                      <label className="text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1 sm:mb-0">
                         Selecionar Colaboradores ({bulkFormData.employeeIds.length})
                       </label>
-                      <div className="relative w-full sm:w-48">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-                        <input 
-                          type="text" 
-                          placeholder="Buscar funcionário..." 
-                          className={`w-full pl-8 pr-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none transition-all ${theme.ring} focus:ring-2`}
-                          value={bulkSearchTerm}
-                          onChange={e => setBulkSearchTerm(e.target.value)}
-                        />
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="relative w-full sm:w-48">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" size={18} />
+                          <input 
+                            type="text" 
+                            placeholder="Buscar..." 
+                            className={`w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 text-slate-900 dark:text-white`}
+                            value={bulkSearchTerm}
+                            onChange={e => setBulkSearchTerm(e.target.value)}
+                          />
+                        </div>
+                        <div className="w-full sm:w-56">
+                          <select 
+                            className={`w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none transition-all ${theme.ring} focus:ring-2 text-slate-900 dark:text-white`}
+                            value={bulkCompanyFilter}
+                            onChange={e => setBulkCompanyFilter(e.target.value)}
+                          >
+                            <option value="">Todas as Empresas</option>
+                            {[...companies].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(c => (
+                              <option key={c.id} value={c.name}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
                     
