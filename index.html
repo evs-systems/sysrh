@@ -694,6 +694,13 @@
           );
         };
 
+        const toJsDate = (value) => {
+          if (!value) return null;
+          if (value?.toDate && typeof value.toDate === 'function') return value.toDate();
+          const d = new Date(value);
+          return isNaN(d.getTime()) ? null : d;
+        };
+
         // --- MAIN APPLICATION COMPONENT ---
         function App() {
           const [user, setUser] = useState(null);
@@ -892,7 +899,7 @@
               (snapshot) => { setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
-            const unsubLogs = onSnapshot(query(collection(db, `${basePath}/logs`), orderBy('timestamp', 'desc'), limit(100)), 
+            const unsubLogs = onSnapshot(query(collection(db, `${basePath}/logs`), orderBy('timestamp', 'desc'), limit(500)), 
               (snapshot) => { setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); },
               handleSnapError
             );
@@ -10200,10 +10207,11 @@
             setVisibleCount(50);
           }, [filterType, filterDay, filterMonth, filterYear, filterAction, searchTerm]);
 
-          const getPartsFromISO = (iso) => {
-            if (!iso) return null;
-            const d = new Date(iso);
-            if (isNaN(d.getTime())) return null;
+          const getPartsFromISO = (value) => {
+            if (!value) return null;
+            // Tenta converter usando a função toJsDate que já existe no seu arquivo e é segura
+            const d = toJsDate(value);
+            if (!d || isNaN(d.getTime())) return null;
             return {
               d: String(d.getDate()).padStart(2, '0'),
               m: String(d.getMonth() + 1).padStart(2, '0'),
