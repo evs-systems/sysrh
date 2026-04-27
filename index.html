@@ -6421,7 +6421,18 @@
             return matchSearch && matchCompany && matchUnit && matchSector;
           });
           
-          const sortedFiltered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+          const sortedFiltered = [...filtered].sort((a, b) => {
+            if (activeSubTab === 'desligados') {
+              const parseDate = (d) => {
+                if (!d || typeof d !== 'string') return 0;
+                const parts = d.split('/');
+                if (parts.length !== 3) return 0;
+                return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+              };
+              return parseDate(b.terminationDate) - parseDate(a.terminationDate);
+            }
+            return (a.name || '').localeCompare(b.name || '');
+          });
           const displayedEmployees = sortedFiltered.slice(0, visibleCount);
 
           const openModal = (emp = null) => {
