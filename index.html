@@ -252,7 +252,7 @@
           BarChart2, UserPlus, UserMinus, Loader2, RefreshCw, ShieldCheck,
           MessageSquare, Send, Reply, XCircle, Lightbulb
         } from 'lucide-react';
-        import { initializeApp } from 'firebase/app';
+        import { initializeApp, deleteApp } from 'firebase/app';
         import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from 'firebase/auth';
         import { getFirestore, collection, doc, setDoc as fsSetDoc, getDoc, onSnapshot, addDoc as fsAddDoc, updateDoc as fsUpdateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
@@ -774,6 +774,7 @@
                 setAppUser(null);
               }
               setLoading(false);
+              setIsLoggingIn(false);
             });
             return () => unsubscribe();
           }, []);
