@@ -1213,7 +1213,7 @@
                     {activeTab === 'calendar' && <CalendarView theme={theme} appUser={appUser} events={events} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} />}
                     {activeTab === 'reports' && <ReportsView theme={theme} employees={employees} payments={payments} />}
                     {activeTab === 'vacations' && <VacationsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} />}
-                    {activeTab === 'benefits' && <BenefitsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} />}
+                    {activeTab === 'benefits' && <BenefitsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} showToast={showToast} logAction={logInteraction} db={db} requestConfirm={requestConfirm} handleMaskedView={handleMaskedView} />}
                     {activeTab === 'companies' && <CompaniesView theme={theme} basePath={basePath} appUser={appUser} companies={companies} commercialRooms={commercialRooms} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} handleMaskedView={handleMaskedView} />}
                     {activeTab === 'employees' && <EmployeesView theme={theme} basePath={basePath} appUser={appUser} employees={employees} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} handleMaskedView={handleMaskedView} />}
                     {activeTab === 'payments' && <PaymentsView theme={theme} basePath={basePath} appUser={appUser} employees={employees} payments={payments} companies={companies} showToast={showToast} logAction={logInteraction} requestConfirm={requestConfirm} handleMaskedView={handleMaskedView} />}
@@ -2486,7 +2486,7 @@
             return false;
         };
 
-        function BenefitsView({ theme, basePath, appUser, employees, showToast, logAction, db }) {
+        function BenefitsView({ theme, basePath, appUser, employees, showToast, logAction, db, requestConfirm, handleMaskedView }) {
           const [activeSubTab, setActiveSubTab] = useState('transport');
           const [searchTerm, setSearchTerm] = useState('');
           const [filterCompany, setFilterCompany] = useState('');
